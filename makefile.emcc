@@ -1,0 +1,29 @@
+OPT = -O3 -g0
+SOURCES1 = main_emcc.c scheme.c
+SOURCES = $(addprefix src/, $(SOURCES1))
+
+CC = emcc
+TARGET = index.js
+OBJECTS =$(SOURCES:.c=.bc)
+LDFLAGS= -s USE_GLFW=3 -s WASM=1 -s USE_WEBGL2=1 -s 'EXTRA_EXPORTED_RUNTIME_METHODS=["ccall", "cwrap"]' -s TOTAL_MEMORY=256MB  -s ALLOW_MEMORY_GROWTH=1 #-s DISABLE_DEPRECATED_FIND_EVENT_TARGET_BEHAVIOR=1
+LIBS= ../iron/libiron.bc #../libicydb/libicydb.bc
+CFLAGS = -std=c11 -I.. -I../libicydb/include -c $(OPT) -Wall -Wextra -Werror=implicit-function-declaration -Wformat=0 -D_GNU_SOURCE  -fdiagnostics-color -s WASM=1 -s USE_GLFW=3 -s 'EXTRA_EXPORTED_RUNTIME_METHODS=["ccall", "cwrap"]' #-s DISABLE_DEPRECATED_FIND_EVENT_TARGET_BEHAVIOR=1  #-s 'EXTRA_EXPORTED_RUNTIME_METHODS=["ccall", "cwrap"]' -s EXPORTED_FUNCTIONS="['_c_volume', '_main']"
+all: $(TARGET)
+$(TARGET): $(OBJECTS) #../libicydb/libicydb.bc
+	$(CC) $(LDFLAGS) $(OBJECTS) $(LIBS) -o $@ 
+
+src/basic3d.shader.c: src/basic3d.vs src/basic3d.fs
+	xxd -i src/basic3d.vs > src/basic3d.shader.c
+	xxd -i src/basic3d.fs >> src/basic3d.shader.c
+
+%.bc: %.c $(HEADERS)
+	$(CC) -s WASM=1 $(CFLAGS) $< -o $@ -MMD -MF $@.depends
+depend: h-depend
+clean:
+	rm $(OBJECTS) $(TARGET) src/*.bc.depends
+-include $(OBJECTS:.bc=.bc.depends)
+
+install: $(TARGET)
+	mkdir -v /usr/include/iron |true
+	cp -v ./*.h /usr/include/iron
+	cp -v ./libiron.so /usr/lib/
