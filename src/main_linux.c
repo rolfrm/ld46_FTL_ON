@@ -69,11 +69,6 @@ void log_print(log_level level, const char * fmt, ...){
 int prev_width = 0, prev_height = 0;
 
 bool firstTime = true;
-void do_mainloop(context * ctx){
-  gl_window_make_current(ctx->win);
-  glClear(GL_COLOR_BUFFER_BIT);
-  
-}
 
 
 int logd_enable = 1;
@@ -83,16 +78,14 @@ int main(){
   int simulate_infinite_loop = 1;
 
   gl_window * win = gl_window_open(800,800);
-
-  var ctx = (context *)alloc0(sizeof(context));//infinipaint_context_new(t, win);
-  ctx->win = win;
-  ctx->running = 1;
-  context_init(ctx);
+  
+  var ctx = context_init(win);
+  context_load_lisp(ctx, "init.scm");
+  context_load_lisp(ctx, "init.lisp");
   context_load_lisp(ctx, "model.lisp");
-
   u64 lastmod = 0;
   printf("Edit? %i\n", file_modification_date("model.lisp"));
-  while(ctx->running){
+  while(context_running(ctx)){
     var nowmod = file_modification_date("model.lisp");
     if(nowmod != lastmod){
       lastmod = nowmod;
@@ -101,8 +94,9 @@ int main(){
       context_load_lisp(ctx, "model.lisp");
       printf("Edit!\n");
     }
+    
     render_update(ctx);
-    gl_window_swap(ctx->win);
+    gl_window_swap(win);
   }
   return 0;
 }

@@ -1,12 +1,12 @@
 OPT = -g3 -Og
-LIB_SOURCES1 = main.c main_linux.c scheme.c
+LIB_SOURCES1 = main.c main_linux.c scheme.c tables.c
 
 LIB_SOURCES = $(addprefix src/, $(LIB_SOURCES1))
 CC = gcc
 TARGET = run.exe
 LIB_OBJECTS =$(LIB_SOURCES:.c=.o)
 LDFLAGS= -L. $(OPT) # -Wl,--gc-sections -Wl,-s -fdata-sections -ffunction-sections
-LIBS= -lglfw -lGL -lGLEW -lm -liron -lopenal
+LIBS= -lglfw -lGL -lGLEW -lm -liron -lopenal -licydb
 ALL= $(TARGET)
 CFLAGS = -Isrc/ -Iinclude/ -std=gnu11 -c $(OPT) -Werror=implicit-function-declaration -Wformat=0 -D_GNU_SOURCE -fdiagnostics-color  -Wwrite-strings -msse4.2 -Werror=maybe-uninitialized -DUSE_VALGRIND -DDEBUG -Wall
 

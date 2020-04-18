@@ -1,13 +1,11 @@
 
 //test
 
-typedef struct{
-  gl_window * win;
-  int running;
-  scheme * sc;
-}context;
+typedef struct _context context;
+
+bool context_running(context * ctx);
 
 void render_update(context * ctx);
-void context_init(context * ctx);
+context * context_init(gl_window * win);
 
 void context_load_lisp(context * ctx, const char * file);
