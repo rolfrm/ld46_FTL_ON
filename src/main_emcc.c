@@ -18,6 +18,8 @@
 #include "scheme.h"
 #include <ctype.h>
 
+#include "lisp.c"
+
 void * alloc0(size_t s){
   return calloc(1, s);
 }
@@ -80,8 +82,6 @@ void setColor(const char * color){
   }
   printf("Setting color to: %s=%i\n", color, current_color);
 }
-
-context * current_context;
 
 
 EM_JS(const char*, encodeAsString2, (const char * data, int length), {
@@ -187,7 +187,7 @@ EM_JS(void, infinipaint_load_from_url, (), {
 
 
 int prev_width = 0, prev_height = 0;
-
+gl_window * win;
 bool firstTime = true;
 void do_mainloop(context * ctx){
   int new_width = canvas_get_width();
@@ -197,15 +197,15 @@ void do_mainloop(context * ctx){
     prev_width = new_width;
     prev_height = new_height;
   }
-  current_context = ctx;
-  //render_update(ctx);
   if(firstTime){
     firstTime = false;
-    //infinipaint_load_from_url();    
 
+  }else{
+    //return;
   }
-  gl_window_make_current(ctx->win);
-  glClear(GL_COLOR_BUFFER_BIT);
+  //current_context = ctx;
+  render_update(ctx);
+  
   
 }
 
@@ -215,7 +215,7 @@ int main(){
   int fps = 0;
   int simulate_infinite_loop = 1;
 
-  gl_window * win = gl_window_open(800,800);
+  win = gl_window_open(800,800);
   
   //emscripten_set_touchstart_callback(0, 0, 0, touch_callback);
   //emscripten_set_touchend_callback(0, 0, 0, touch_callback);
@@ -226,9 +226,13 @@ int main(){
 
   scheme_load_string(sc, "(display (cons \"Hello world!\" (+ 1 2)))");
   printf("\n", sc);
-  var x = (context *)alloc0(sizeof(context));//infinipaint_context_new(t, win);
-  x->win = win;
-  emscripten_set_main_loop_arg((void *) &do_mainloop, x, fps, simulate_infinite_loop);
+  var ctx = context_init(win);
+  
+  context_load_lisp_string(ctx, init_scm, 0);
+  context_load_lisp_string(ctx, init_lisp, 0);
+  context_load_lisp_string(ctx, model_lisp, 0);
+
+  emscripten_set_main_loop_arg((void *) &do_mainloop, ctx, fps, simulate_infinite_loop);
   return 0;
 }
 void _error(const char * file, int line, const char * message, ...){

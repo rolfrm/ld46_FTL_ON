@@ -28,6 +28,7 @@ typedef struct{
 typedef struct{
   u32 sub_object;
   mat4 transform;
+  bool hidden;
 }sub_object;
 
 
@@ -143,7 +144,8 @@ void render_polygon(context * ctx, mat4 transform, u32 id){
 	print_object_sub_objects();
 	ERROR("LOOP\n");
       }
-      render_polygon(ctx, mat4_mul(O, sub.transform), sub.sub_object);
+      if(sub.hidden == false)
+	render_polygon(ctx, mat4_mul(O, sub.transform), sub.sub_object);
       //printf("render done\n");
     }
   }
@@ -161,7 +163,11 @@ void render_update(context * ctx){
   var blit3d = ctx->blit3d;
   var bg_color = ctx->bg_color;
   glClearColor(bg_color.x,bg_color.y,bg_color.z,bg_color.w);
-  glClear(GL_COLOR_BUFFER_BIT);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glEnable(GL_DEPTH_TEST);
+  glDisable(GL_CULL_FACE);
+  glCullFace(GL_BACK);
+
   blit3d_context_load(blit3d);
   mat4 C = mat4_invert(ctx->camera_matrix);
 
@@ -207,7 +213,7 @@ pointer load_poly(scheme * sc, pointer data){
   var object =  current_context->polygons + current_context->current_symbol;
   if(object->verts == NULL)
     object->verts = blit3d_polygon_new();
-  blit3d_polygon_load_data(object->verts, fs, c * sizeof(fs[0]));
+  blit3d_polygon_load_data(object->verts, fs, c * sizeof(f32));
   blit3d_polygon_configure(object->verts, 3);
   free(fs);
   return sc->NIL;
@@ -551,7 +557,27 @@ pointer camera_right(scheme * sc, pointer args){
   return vec3_to_scheme(sc, v);
 }
 
+pointer hide_sub_object(scheme * sc, pointer args){
+  u32 id;  
+  pointer ptr = pair_car(args);
+  var ctx = current_context;
+  if(ptr_to_u32_table_try_get(current_context->sub_object_list, &ptr, &id)){
+    var obj = current_context->sub_objects + id;
+    obj->hidden = true;
+  }
+  return sc->NIL;
+}
 
+pointer show_sub_object(scheme * sc, pointer args){
+  u32 id;  
+  pointer ptr = pair_car(args);
+  var ctx = current_context;
+  if(ptr_to_u32_table_try_get(current_context->sub_object_list, &ptr, &id)){
+    var obj = current_context->sub_objects + id;
+    obj->hidden = false;
+  }
+  return sc->NIL;
+}
 
 context * context_init(gl_window * win){
    scheme_registerable reg[] = {
@@ -573,7 +599,9 @@ context * context_init(gl_window * win){
     {.f = unset_sub_object, .name="unset-sub-object"},
     {.f = key_is_down, .name="key-is-down"},
     {.f = camera_direction, .name="camera-direction"},
-    {.f = camera_right, .name="camera-right"}
+    {.f = camera_right, .name="camera-right"},
+    {.f = hide_sub_object, .name="hide-sub-object"},
+    {.f = show_sub_object, .name="show-sub-object"}
   };
    context * ctx = alloc0(sizeof(ctx[0]));
    ctx->blit3d  = blit3d_context_new();
@@ -607,4 +635,9 @@ void context_load_lisp(context * ctx, const char * file){
   fclose(fin);
 
   
+}
+
+
+void context_load_lisp_string(context * ctx, const char * string, size_t length){
+  scheme_load_string(ctx->sc, string);
 }
