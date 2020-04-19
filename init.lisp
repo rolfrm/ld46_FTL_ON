@@ -3,6 +3,8 @@
 (define *key-down* 264)
 (define *key-left* 263)
 (define *key-right* 262)
+(define *key-enter* 257)
+(define *key-shift* 340)
 
 "
   KEY_UP = 265,
