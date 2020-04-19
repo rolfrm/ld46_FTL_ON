@@ -85,6 +85,7 @@ int main(){
   context_load_lisp(ctx, "model.lisp");
   u64 lastmod = 0;
   printf("Edit? %i\n", file_modification_date("model.lisp"));
+  var last = 0.0; timestampf();
   while(context_running(ctx)){
     var nowmod = file_modification_date("model.lisp");
     if(nowmod != lastmod){
@@ -94,8 +95,11 @@ int main(){
       context_load_lisp(ctx, "model.lisp");
       printf("Edit!\n");
     }
-    
-    render_update(ctx);
+    var now = timestampf();
+    if(last < 0.001)
+      last = now;
+    render_update(ctx, now - last);
+    last = now;
     gl_window_swap(win);
     gl_window_poll_events();
       

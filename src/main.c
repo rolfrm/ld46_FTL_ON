@@ -29,6 +29,7 @@ typedef struct{
   u32 sub_object;
   mat4 transform;
   bool hidden;
+  vec4 color;
 }sub_object;
 
 
@@ -56,6 +57,8 @@ struct _context{
   mat4 camera_matrix;
 
   vec4 bg_color;
+
+  float dt;
 };
 
 context * current_context;
@@ -95,7 +98,7 @@ void print_object_sub_objects(){
 
 int render_it = 0;
 vec3 v3_one = {.x = 1, .y = 1, .z = 1};
-void render_polygon(context * ctx, mat4 transform, u32 id){
+void render_polygon(context * ctx, mat4 transform, u32 id, vec4 color){
   //print_object_sub_objects();
   //ERROR("!!");
   if(render_it > 5) ERROR("Stack\n");
@@ -124,7 +127,7 @@ void render_polygon(context * ctx, mat4 transform, u32 id){
     // Vertx * Object * InvCamera * View
     
     blit3d_view(blit3d, mat4_mul(V, mat4_mul(C, O)));
-    blit3d_color(blit3d, object->color);
+    blit3d_color(blit3d, vec4_mul(object->color, color));
     blit3d_polygon_blit(blit3d, object->verts);
   }
   int err = glGetError();
@@ -145,7 +148,7 @@ void render_polygon(context * ctx, mat4 transform, u32 id){
 	ERROR("LOOP\n");
       }
       if(sub.hidden == false)
-	render_polygon(ctx, mat4_mul(O, sub.transform), sub.sub_object);
+	render_polygon(ctx, mat4_mul(O, sub.transform), sub.sub_object,  vec4_mul(sub.color, color));
       //printf("render done\n");
     }
   }
@@ -153,10 +156,21 @@ void render_polygon(context * ctx, mat4 transform, u32 id){
   render_it -= 1;
 }
 
-void render_update(context * ctx){
+void render_update(context * ctx, float dt){
+  { // handle events
+    gl_window_event evt[10];
+    size_t cnt = gl_get_events(evt, array_count(evt));
+    for(size_t i = 0; i < cnt; i++){
+      if(evt[i].type == EVT_KEY_DOWN){
+	//printf("%i \n", evt[i].key.key);
+      }
+    }
+  }
+
 
   scheme_load_string(ctx->sc, "(update)");
   current_context = ctx;
+  current_context->dt = dt;
   gl_window_make_current(ctx->win);
   
   blit_begin(BLIT_MODE_UNIT);
@@ -169,11 +183,10 @@ void render_update(context * ctx){
   glCullFace(GL_BACK);
 
   blit3d_context_load(blit3d);
-  mat4 C = mat4_invert(ctx->camera_matrix);
-
+  
   for(u32 i = 0; i < ctx->shown_objects->count; i++){
     render_it = 0;
-    render_polygon(ctx, mat4_identity(), ctx->shown_objects->key[i + 1]);  
+    render_polygon(ctx, mat4_identity(), ctx->shown_objects->key[i + 1], vec4_new(1,1,1,1));  
   }
 }
 
@@ -187,7 +200,7 @@ int list_len(scheme * sc, pointer data){
 }
 
 float * pointer_to_floats(scheme * sc, pointer data, size_t * cnt){
-  var orig_data = data;
+  //var orig_data = data;
   int l = list_len(sc, data);
   f32 * array = alloc0(l * sizeof(data[0]));
   int offset = 0;
@@ -206,9 +219,9 @@ float * pointer_to_floats(scheme * sc, pointer data, size_t * cnt){
   return array;
 }
 
-pointer load_poly(scheme * sc, pointer data){
+pointer load_poly(scheme * sc, pointer args){
   size_t c = 0;
-  f32 * fs = pointer_to_floats(sc, data, &c);
+  f32 * fs = pointer_to_floats(sc, args, &c);
 
   var object =  current_context->polygons + current_context->current_symbol;
   if(object->verts == NULL)
@@ -257,6 +270,7 @@ pointer define_model(scheme * sc, pointer args){
     current_context->polygons = realloc(current_context->polygons, sizeof(current_context->polygons[0]) * current_context->polygon_count);
     current_context->polygons[newid] = (polygon){0};
     current_context->polygons[newid].scale = vec3_new(1,1,1);
+    current_context->polygons[newid].color = vec4_new(1,1,1,1); 
     id = newid;
     ptr_to_u32_table_set(current_context->sym_to_object, ptr, id);
     
@@ -441,6 +455,8 @@ pointer define_sub_object(scheme * sc, pointer args){
     ctx->sub_objects = realloc(current_context->sub_objects, sizeof(current_context->sub_objects[0]) * current_context->sub_object_count);
     ctx->sub_objects[newid] = (sub_object){0};
     ctx->sub_objects[newid].transform = mat4_identity();
+    ctx->sub_objects[newid].color = vec4_new(1,1,1,1);
+    
     id = newid;
     ptr_to_u32_table_set(current_context->sub_object_list, ptr, id);
   }
@@ -557,10 +573,12 @@ pointer camera_right(scheme * sc, pointer args){
   return vec3_to_scheme(sc, v);
 }
 
+pointer get_dt(scheme * sc, pointer args){
+  return sc->vptr->mk_real(sc, current_context->dt);
+}
 pointer hide_sub_object(scheme * sc, pointer args){
   u32 id;  
   pointer ptr = pair_car(args);
-  var ctx = current_context;
   if(ptr_to_u32_table_try_get(current_context->sub_object_list, &ptr, &id)){
     var obj = current_context->sub_objects + id;
     obj->hidden = true;
@@ -571,12 +589,26 @@ pointer hide_sub_object(scheme * sc, pointer args){
 pointer show_sub_object(scheme * sc, pointer args){
   u32 id;  
   pointer ptr = pair_car(args);
-  var ctx = current_context;
   if(ptr_to_u32_table_try_get(current_context->sub_object_list, &ptr, &id)){
     var obj = current_context->sub_objects + id;
     obj->hidden = false;
   }
   return sc->NIL;
+}
+
+pointer sub_object_color(scheme * sc, pointer args){
+  u32 id;  
+  pointer ptr = pair_car(args);
+  args = pair_cdr(args);
+  
+  size_t c = 0;
+  f32 * fs = pointer_to_floats(sc, args, &c);
+  
+  if(c == 4 && ptr_to_u32_table_try_get(current_context->sub_object_list, &ptr, &id)){
+    var obj = current_context->sub_objects + id;
+    obj->color = vec4_new(fs[0], fs[1], fs[2], fs[3]);
+  }
+  return sc->NIL;  
 }
 
 context * context_init(gl_window * win){
@@ -601,7 +633,9 @@ context * context_init(gl_window * win){
     {.f = camera_direction, .name="camera-direction"},
     {.f = camera_right, .name="camera-right"},
     {.f = hide_sub_object, .name="hide-sub-object"},
-    {.f = show_sub_object, .name="show-sub-object"}
+    {.f = show_sub_object, .name="show-sub-object"},
+    {.f = sub_object_color, .name="sub-object-color"},
+    {.f = get_dt, .name="get-dt"}
   };
    context * ctx = alloc0(sizeof(ctx[0]));
    ctx->blit3d  = blit3d_context_new();

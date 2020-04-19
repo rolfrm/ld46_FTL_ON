@@ -189,7 +189,10 @@ EM_JS(void, infinipaint_load_from_url, (), {
 int prev_width = 0, prev_height = 0;
 gl_window * win;
 bool firstTime = true;
+double last_meas = 0.0;
 void do_mainloop(context * ctx){
+  if(last_meas < 0.01)
+    last_meas = emscripten_date_now();
   int new_width = canvas_get_width();
   int new_height = canvas_get_height();
   if(new_width != prev_width || new_height != prev_height){
@@ -204,7 +207,8 @@ void do_mainloop(context * ctx){
     //return;
   }
   //current_context = ctx;
-  render_update(ctx);
+  var now = emscripten_date_now();
+  render_update(ctx, MAX(1.0 / 60.0, (last_meas - now) * 1000.0));
   
   
 }

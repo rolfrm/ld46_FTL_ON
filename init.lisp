@@ -5,7 +5,7 @@
 (define *key-right* 262)
 (define *key-enter* 257)
 (define *key-shift* 340)
-
+(define *key-space* 32)
 "
   KEY_UP = 265,
   KEY_DOWN = 264,

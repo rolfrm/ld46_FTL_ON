@@ -101,32 +101,10 @@
     </span>
 
   </span>
-      <button class="expander">?</button>
-      <div class="collapsible">
-	FTL ON: Game for LD 46. https://ldjam.com.
-      </div>
-        <button class="expander">+</button>
-        <div class="collapsible">
-         <input type="file" id="load_btn" value="Load"></input>
-         <a type id="save_link" download="painting.bin" href="data:text/plain;charset=utf-8,123456">Download</a>
-         <input id="name_select" type="text" value="painting"></text>
-        </div>
-         
+
+	FTL ON: Game for LD 46. https://ldjam.com. Use Arrow keys! Collect the blue orbs before you run out of fuel.
+
       
-      <button class="expander">Paint</button>
-      <div class="collapsible">
-          <input id="brushcolor" type="color" value="#FFFFFF" />
-          Brush Size:
-          <Input id="brush-size" type='range' min="1" value="3" max="6" w></Input>
-          Brush Res:
-          <Input id="brush-res" type='range' min="3" value="6" max="8" ></Input>
-          Touch Paint Mode:
-         <input type="checkbox" id="TouchPaintEnable"/>
-      </div>
-      
-      
-      <Button id="zoom_in_btn" class="touch_button" >Zoom +</Button>
-      <Button id="zoom_out_btn" class="touch_button">Zoom -</Button>
   </div>
   <div class="emscripten">
     <progress value="0" max="100" id="progress" height="0" hidden=1></progress>
@@ -268,81 +246,7 @@
         if (text) Module.printErr('[post-exception status] ' + text);
       };
     };
-    colorWell = document.querySelector("#brushcolor");
-
-    colorWell.select();
-    function updateFirst(e) {
-      Module.ccall("setColor", [], ['string'], [colorWell.value]);
-    }
-    colorWell.addEventListener("input", updateFirst, false);
-    clicklink = function (e) {
-      var stringv = Module.ccall("encodeAsString", 'string', [], []);
-      document.querySelector("#save_link").download = document.querySelector("#name_select").value;
-      document.querySelector("#save_link").href = "data:text/plain;charset=utf-8," + stringv;
-    }
-
-
-    document.querySelector("#save_link").addEventListener("click", clicklink, false)
-
-    loadFileAsString = function (evt) {
-
-      var reader = new FileReader();
-      var file = evt.target.files[0];
-      reader.onload = function (e) {
-        var typedArray = new Uint8Array(e.target.result);
-        var numBytes = typedArray.length * typedArray.BYTES_PER_ELEMENT;
-        var ptr = Module._malloc(numBytes);
-        var heapBytes = new Uint8Array(Module.HEAPU8.buffer, ptr, numBytes);
-        heapBytes.set(new Uint8Array(typedArray.buffer));
-        Module.ccall("decodeAsString2", [], ['number', 'number'], [heapBytes.byteOffset, numBytes]);
-      }
-      reader.readAsArrayBuffer(file);
-    }
-
-    document.querySelector("#load_btn").addEventListener("change", loadFileAsString);
-    zoom_in = function () {
-      Module.ccall("infiniPaintZoom", [], ['float'], [-1.0])
-    }
-    zoom_out = function () {
-      Module.ccall("infiniPaintZoom", [], ['float'], [1.0])
-    }
-
-    document.querySelector("#zoom_in_btn").addEventListener("click", zoom_in);
-    document.querySelector("#zoom_out_btn").addEventListener("click", zoom_out);
-    
-    setBrushConf = function(){
-      var size = document.querySelector("#brush-size").value;
-      var res = document.querySelector("#brush-res").value;
-      Module.ccall("brushConf", [], ['int', 'int'], [parseInt(size), parseInt(res)]);
-    }
-
-    document.querySelector("#brush-res").addEventListener("change", setBrushConf);
-    document.querySelector("#brush-size").addEventListener("change", setBrushConf);
-
-    var istyping = false;
-    var name_select = document.querySelector('#name_select');
-    name_select.onfocus = function(e){
-      istyping = true;
-    };
-    name_select.onblur = function(e){
-      istyping = false;
-    };
-    window.addEventListener('keydown', function(event){
-      if(istyping)
-         event.stopImmediatePropagation();
-      }, true);
-
-window.addEventListener('keyup', function(event){
-  if(istyping)
-         event.stopImmediatePropagation();
-}, true);
-       //colorWell.addEventListener("change", updateAll, false);
-    
-  touchPaintEnable = document.querySelector('#TouchPaintEnable');
-  touchPaintEnable.onclick = function(e) 
-  {
-    Module.ccall("setTouchPaintEnable", [], ['int'], [touchPaintEnable.checked == true ? 1 : 0] );
-  }; 
+ 
 
 
   </script>
