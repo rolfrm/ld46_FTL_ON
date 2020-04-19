@@ -1,31 +1,40 @@
 (define-model 'rolf-model)
-(set-camera 0 0 5.5 0 0 0)
+(set-camera 0 0 3.5 0 0 0)
 
 (define update
-    (let ((t 3))
+    (let ((t 3)
+	  (x 0)
+	  )
       (lambda ()
-	(if (> t 5.0)
+	(if (> t 15.0)
 	    (set! t 0))
-	(set-camera 0 0 (- 5.5 t) 0 0 0)
+	(set-camera 0 0 (- 5.5 t) 0 x 0)
 	(define-model 'a)
 	(set-color (+ (* 0.15 (sin (* 10 t))) 0.5) 0.3 0.1 1.0)
 					;(offset-model (* 0.1 (sin t)) -0.3)
-	
-	(set! t (+ t 0.00))
+	(when (key-is-down *key-up*)
+	  (set! t (+ t 0.01)))
+	(when (key-is-down *key-down*)
+	  (set! t (- t 0.01)))
+	(when (key-is-down *key-left*)
+	  (set! x (- x 0.01)))
+	(when (key-is-down *key-right*)
+	  (set! x (+ x 0.01)))
 	)))
+;(set! update (lambda ()))
 
-(display "FTLA\n")
 (perspective 1.0 1.0 0.1 100)
 ;(orthographic -1.0 1.0 -1.0 1.0 -1 1)
 (set-bg-color 0.1 0.1 0.1 1)
 
 (define-model 'friend)
 (set-color 0.9 0.9 0.4 1.0)
-(load-poly 0 0 0
-	   0.1 0 0
-	   0.0 0.1 0
+(load-poly -0.1 -0.1 0
+	   0.1 -0.1 0
+	   -0.1 0.1 0
 	   0.1 0.1 0)
-(offset-model 0.2 0.2)
+(offset-model 0.0 0.0 0.0)
+(rotate-model 0 0.0 0.1)
 (unshow-model 'friend)
 
 (define-model 'a)
@@ -65,13 +74,13 @@
 (unshow-model 'b)
 
 
-(define-model 'c)
+(define-model 'tree-top)
 (set-color 0.1 0.4 0.1 1.0)
 (load-poly 0.0 0 0
 	   0.5 0 0
 	   0.25 0.5 0)
 (offset-model -0.3 -0.0)
-(show-model 'c)
+(show-model 'tree-top)
 
 (define-model 'd)
 (set-color 0.1 0.4 0.1 1.0)
@@ -91,7 +100,7 @@
 	   0.2 -0.0 0
 	   0 -0.1 0
 	   )
-(offset-model -0.8 0.8 3.5)
+(offset-model -0.8 0.8 1.8)
 (show-model 'star)
 
 (define-model 'star2)

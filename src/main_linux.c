@@ -97,6 +97,8 @@ int main(){
     
     render_update(ctx);
     gl_window_swap(win);
+    gl_window_poll_events();
+      
   }
   return 0;
 }

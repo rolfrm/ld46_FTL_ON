@@ -45,7 +45,6 @@ struct _context{
   u32_to_u32_table * sub_object_list;
   u32_to_u32_table * poly_to_sub_object;
   
-  
   u32_to_u32_table * shown_objects;
   u32 current_symbol;
   u32 current_sub_object;
@@ -54,6 +53,17 @@ struct _context{
 };
 
 context * current_context;
+
+mat4 rotate_offset_3d_transform(float x, float y, float z, float rx, float ry, float rz){
+  var m = mat4_identity();
+  m.data[3][0] = x;
+  m.data[3][1] = y;
+  m.data[3][2] = z;
+  m = mat4_rotate_X(m, rx);
+  m = mat4_rotate_Y(m, ry);
+  m = mat4_rotate_Z(m, rz);
+  return m;
+}
 
 bool context_running(context * ctx){
   current_context = ctx;
@@ -68,10 +78,13 @@ void render_polygon(context * ctx, mat4 transform, u32 id){
   var blit3d = ctx->blit3d;
   var object =  ctx->polygons + id;
   
-  mat4 O = mat4_translate_vec3(object->offset);
+  var o = object->offset.data;
+  var r = object->rotation.data;
+  var O = rotate_offset_3d_transform(o[0], o[1], o[2], r[0], r[1], r[2]);
+  
   mat4 C = mat4_invert(ctx->camera_matrix);
   
-  O = mat4_mul(O, transform);
+  O = mat4_mul(transform, O);
   
   if(object->verts != NULL){
     mat4 V = ctx->view_matrix;
@@ -190,7 +203,6 @@ u32 pointer_to_polygon(pointer arg){
 }
 
 pointer define_model(scheme * sc, pointer args){
-  printf("define model %i\n", pair_car(args));
   u32 ptr = (u32)pair_car(args);
   // ptr -> symbol pointer
   u32 id;
@@ -202,8 +214,6 @@ pointer define_model(scheme * sc, pointer args){
     id = newid;
     u32_to_u32_table_set(current_context->sym_to_object, ptr, id);
     
-  }else{
-    printf("Model was already defined %i\n", id);
   }
   current_context->current_symbol = id;
   return sc->NIL;
@@ -252,8 +262,26 @@ pointer offset_model(scheme * sc, pointer args){
       
 }
 
+pointer rotate_model(scheme * sc, pointer args){
+  size_t count;
+  f32 * f = pointer_to_floats(sc, args, &count);
+  vec3 offset;
+  if(count == 2){
+    offset = vec3_new(f[0], f[1], 0);
+  }else if(count == 3){
+    offset = vec3_new(f[0], f[1], f[2]);
+  }else{
+    goto end;
+  }
+  var object =  current_context->polygons + current_context->current_symbol;
+  object->rotation = offset;
+ end:;
+  free(f);
+  return sc->NIL; 
+      
+}
+
 pointer set_color(scheme * sc, pointer args){
-  printf("set color\n");
   size_t count;
   f32 * colors = pointer_to_floats(sc, args, &count);
   if(count == 4){
@@ -297,16 +325,9 @@ pointer set_camera(scheme * sc, pointer args){
   // pos:x y z rot: x y z
   if(count == 6){
     
-    var m = mat4_identity();//translate(fargs[0],fargs[1],fargs[2]);
-    m.data[3][0] = fargs[0];
-    m.data[3][1] = fargs[1];
-    m.data[3][2] = fargs[2];
-    m = mat4_rotate_X(m, fargs[3]);
-    m = mat4_rotate_Y(m, fargs[4]);
-    m = mat4_rotate_Z(m, fargs[5]);
-
+    var m = rotate_offset_3d_transform(fargs[0], fargs[1], fargs[2],
+				       fargs[3], fargs[4], fargs[5]);
     current_context->camera_matrix = m;
-    //ctx->camera_rot = vec3_new(fargs[3],fargs[4],fargs[5]);
   }
   free(fargs);
   return sc->NIL;
@@ -434,6 +455,17 @@ pointer set_sub_object_transform(scheme * sc, pointer args){
   return sc->NIL;
 }
 
+pointer key_is_down(scheme * sc, pointer args){
+  if(is_integer(pair_car(args)) == false)
+    ERROR("Key is not integer");
+  int keyid = ivalue(pair_car(args));
+  bool isdown = gl_window_get_key_state(current_context->win, keyid);
+  if(isdown)
+    return sc->T;
+  return sc->F;
+  
+}
+
 
 
 context * context_init(gl_window * win){
@@ -446,15 +478,14 @@ context * context_init(gl_window * win){
     {.f = unshow_model, .name = "unshow-model"},
     {.f = set_color, .name = "set-color"},
     {.f = offset_model, .name= "offset-model"},
+    {.f = rotate_model, .name="rotate-model"},
     {.f = set_perspective, .name="perspective"},
     {.f = set_orthographic, .name="orthographic"},
     {.f = set_camera, .name="set-camera"},
     {.f = define_sub_object, .name="define-sub-object"},
     {.f = set_sub_object_transform, .name="set-sub-object-transform"},
-    {.f = unset_sub_object, .name="unset-sub-object"}
-    
-    
-
+    {.f = unset_sub_object, .name="unset-sub-object"},
+    {.f = key_is_down, .name="key-is-down"}
   };
    context * ctx = alloc0(sizeof(ctx[0]));
    ctx->blit3d  = blit3d_context_new();
