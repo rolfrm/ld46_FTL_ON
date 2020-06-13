@@ -73,26 +73,29 @@ bool firstTime = true;
 
 int logd_enable = 1;
 
-int main(){
+int main(int argc, char ** argv){
   int fps = 0;
   int simulate_infinite_loop = 1;
 
+  char * model = "model.lisp";
+  if(argc == 2)
+    model = argv[1];
   gl_window * win = gl_window_open(800,800);
   
   var ctx = context_init(win);
   context_load_lisp(ctx, "init.scm");
   context_load_lisp(ctx, "init.lisp");
-  context_load_lisp(ctx, "model.lisp");
-  u64 lastmod = 0;
-  printf("Edit? %i\n", file_modification_date("model.lisp"));
-  var last = 0.0; timestampf();
+
+  printf("Edit? %i\n", file_modification_date(model));
+  var last = 0;
+  u64 lastmod = 0;;
   while(context_running(ctx)){
-    var nowmod = file_modification_date("model.lisp");
+    var nowmod = file_modification_date(model);
     if(nowmod != lastmod){
       lastmod = nowmod;
 
       //iron_sleep(1);
-      context_load_lisp(ctx, "model.lisp");
+      context_load_lisp(ctx, model);
       printf("Edit!\n");
     }
     var now = timestampf();
