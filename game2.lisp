@@ -7,6 +7,8 @@
     (cons 'scale elems))
 (define (offset . elems)
     (cons 'offset elems))
+(define (rotate . elems)
+    (cons 'rotate elems))
 
 (define (load-model) (cons 'model (object-new)))
 
@@ -20,11 +22,10 @@
 
 					;(set-camera 0 0 3.5 0 0 0)
 
-(define update (lambda () ))
+
 ;(perspective 1.0 1.0 0.1 10000)
 (orthographic -5.0 5.0 -5.0 5.0 -5 5)
 (set-bg-color 0.05 0.05 0.05 1)
-
 
 
 (define --empty-- (load-model))
@@ -35,16 +36,18 @@
 (display m1)
 
 (config-model m1
-	      (poly 0 0 0
-		    1 0 0
-		    0.5 1 0
-		    1 1 0
-		    2 2 0
-		    3 2 0
-		    3 3 0)
-	      (color 1.0 0.3 0.0 1)
-	      (scale 1.0 1.0 1.0)
-	      (offset 0 0 0)
+	      (model
+	       (poly 0 0 0
+		     1 0 0
+		     0.5 1 0
+		     1 1 0
+		     2 2 0
+		     3 2 0
+		     3 3 0)
+	       (color 1.0 0.3 0.0 1)
+	       (scale 1.0 1.0 1.0)
+	       (offset 0 0 0)
+	       (rotate 0.0 0.0 0.0))
 
 	      (model
 	       (poly 0 0 0
@@ -53,8 +56,31 @@
 		     1 1 0)
 	       (color 1.0 1.0 1.0 1)
 	       (scale 1 1 1)
+	       (rotate 0 0 0.0)
 	       (offset -2 0 0)
-	      ))
+	       )
+	      (model
+	       (poly 0 0 0
+		     1 0 0
+		     0.5 -1 0)
+	       (color 1.0 1.0 1.0 1)
+	       (scale 2 1 1)
+	       (rotate 0 0 0.0)
+	       (offset -1.5 -0.5 0)
+	       )
+	      (offset -1 1 0)
+	      (rotate 0 0.0 0.0)
+	      )
+
+(define update
+    (let ((t 0.0))
+
+      (lambda ()
+	(set! t (+ t 0.5))
+	(config-model m1
+		      (rotate 0 (* t 0.01) (* t 0.01)))
+
+	)))
 
 ;(config-model m1
 ;	      (color 0 0 1 1))

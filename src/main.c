@@ -620,9 +620,10 @@ pointer config_model(scheme * sc, pointer args){
       bool ispoly = strcmp(symchars, "poly") == 0;
       bool iscolor = !ispoly && strcmp(symchars, "color") == 0;
       bool isscale = !iscolor && !ispoly && strcmp(symchars, "scale") == 0;
+      bool isrotate = !iscolor && !ispoly && strcmp(symchars, "rotate") == 0;
       bool isoffset = strcmp(symchars, "offset") == 0;
       bool ismodel = strcmp(symchars, "model") == 0;
-      if(ispoly || iscolor || isscale || isoffset){
+      if(ispoly || iscolor || isscale || isoffset || isrotate){
 	// this is for model data that is only floats.
 	size_t c = 0;
 	f32 * fs = pointer_to_floats(sc, pair_cdr(pt2), &c);
@@ -641,6 +642,9 @@ pointer config_model(scheme * sc, pointer args){
 	}else if(isoffset){
 	  memcpy(object->offset.data, fs, MIN(3, c) * sizeof(fs[0]));
 	  printf("OFFSET: ");vec3_print(object->scale);printf("\n");
+	}else if(isrotate){
+	  memcpy(object->rotation.data, fs, MIN(3, c) * sizeof(fs[0]));
+	  printf("ROTATE: ");vec3_print(object->rotation);printf("\n");
 	}
 	free(fs);
       }
