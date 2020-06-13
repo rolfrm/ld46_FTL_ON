@@ -30,24 +30,12 @@
 
 (define --empty-- (load-model))
 
-(define m1 (load-model))
-(show-model m1)
-
-(display m1)
-
-(config-model m1
-	      (model
+(define m1 (model
+	      (model ; sub model
 	       (poly 0 0 0
 		     1 0 0
-		     0.5 1 0
-		     1 1 0
-		     2 2 0
-		     3 2 0
-		     3 3 0)
-	       (color 1.0 0.3 0.0 1)
-	       (scale 1.0 1.0 1.0)
-	       (offset 0 0 0)
-	       (rotate 0.0 0.0 0.0))
+		     0.5 1 0)
+	       (color 1.0 0.3 0.0 1))
 
 	      (model
 	       (poly 0 0 0
@@ -55,8 +43,6 @@
 		     0 1 0
 		     1 1 0)
 	       (color 1.0 1.0 1.0 1)
-	       (scale 1 1 1)
-	       (rotate 0 0 0.0)
 	       (offset -2 0 0)
 	       )
 	      (model
@@ -65,20 +51,24 @@
 		     0.5 -1 0)
 	       (color 1.0 1.0 1.0 1)
 	       (scale 2 1 1)
-	       (rotate 0 0 0.0)
 	       (offset -1.5 -0.5 0)
 	       )
-	      (offset -1 1 0)
-	      (rotate 0 0.0 0.0)
+	      (offset 0.5 1 0)
+	      (scale 2 2 2)
 	      )
+)
+
+(show-model m1)
+
+(display m1)
+
 
 (define update
     (let ((t 0.0))
 
       (lambda ()
 	(set! t (+ t 0.5))
-	(config-model m1
-		      (rotate 0 (* t 0.01) (* t 0.01)))
+	;(config-model m1 (rotate 0 0 (* t 0.01)))
 
 	)))
 
