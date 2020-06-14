@@ -73,6 +73,8 @@ bool firstTime = true;
 
 int logd_enable = 1;
 
+extern unsigned char _usr_share_fonts_truetype_dejavu_DejaVuSans_ttf[];
+
 int main(int argc, char ** argv){
   int fps = 0;
   int simulate_infinite_loop = 1;
@@ -83,6 +85,11 @@ int main(int argc, char ** argv){
   gl_window * win = gl_window_open(800,800);
   
   var ctx = context_init(win);
+
+  
+  font * fnt =  blit_load_font_from_buffer(_usr_share_fonts_truetype_dejavu_DejaVuSans_ttf, 20);
+    blit_set_current_font(fnt);
+    
   context_load_lisp(ctx, "init.scm");
   context_load_lisp(ctx, "init.lisp");
 

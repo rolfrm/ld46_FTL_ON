@@ -1,5 +1,5 @@
 OPT = -g3 -Og
-LIB_SOURCES1 = main.c main_linux.c scheme.c tables.c audio.c
+LIB_SOURCES1 = main.c main_linux.c scheme.c tables.c audio.c ttf_font.c
 
 LIB_SOURCES = $(addprefix src/, $(LIB_SOURCES1))
 CC = gcc
@@ -17,6 +17,10 @@ all: $(ALL)
 
 .c.o: $(HEADERS) $(LEVEL_CS)
 	$(CC) $(CFLAGS) $< -o $@ -MMD -MF $@.depends
+
+src/ttf_font.c: 
+	xxd -i /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf > src/ttf_font.c
+main.o: ttf_font.c
 
 depend: h-depend
 clean:

@@ -18,16 +18,29 @@
 #include "main.h"
 
 typedef enum{
-  MODEL_TYPE_POLYGONAL
+  MODEL_TYPE_POLYGONAL = 100,
+  MODEL_TYPE_TEXT = 200,
+  MODEL_TYPE_FONT = 300, // sets the font for every sub element
 
 }model_type;
 
 typedef struct{
+  vec2 dim_px;
+  texture tex;
+  bool loaded;
+}text_cache;
+
+typedef struct{
   model_type type;
-  //union{
-  blit3d_polygon * verts;
+  union{
+    blit3d_polygon * verts;
   //distance_field_model * dist;
-  //};
+    struct {
+      char * text;
+      text_cache cache;
+      blit3d_polygon * text_quad;
+    };
+  };
   vec4 color;
   vec3 offset;
   vec3 rotation;
@@ -114,7 +127,7 @@ void render_model(context * ctx, mat4 transform, u32 id, vec4 color){
   
   O = mat4_mul(transform, O);
   
-  if(object->verts != NULL){
+  if(object->type == MODEL_TYPE_POLYGONAL && object->verts != NULL){
     mat4 V = ctx->view_matrix;
     // World coord: Object * Vertex
     // Camera coord: InvCamera * World
@@ -124,6 +137,46 @@ void render_model(context * ctx, mat4 transform, u32 id, vec4 color){
     blit3d_view(blit3d, mat4_mul(V, mat4_mul(C, O)));
     blit3d_color(blit3d, color);
     blit3d_polygon_blit(blit3d, object->verts);
+  }
+  if(object->type == MODEL_TYPE_TEXT && object->text != NULL){
+    
+    if(object->cache.loaded == false){
+      printf("Loading texture cache\n");
+      vec2 dim = blit_measure_text(object->text);
+      vec2_print(dim);logd("\n");
+      object->cache.dim_px = dim;
+      object->cache.loaded = true;
+
+      //image tex_img = {.width = (int)dim.x, .height = (int)dim.y, .channels = 2, .mode = GRAY_AS_ALPHA};
+      //texture tex = texture_from_image(&tex_img);
+      blit_framebuffer buf = {.width = (int)dim.x, .height = (int)dim.y};
+      blit_create_framebuffer(&buf);
+      //blit_use_framebuffer(&buf);
+      blit_begin(BLIT_MODE_UNIT);
+      blit_rectangle2(1, 0 ,0, 1);
+      blit_unuse_framebuffer();
+      blit3d_context_load(blit3d);
+      object->text_quad = blit3d_polygon_new();
+      float xy[] = {-1,-1,0, 1,-1,0, -1,1,0, 1,1,0};
+      blit3d_polygon_load_data(object->text_quad, xy, 12 * sizeof(f32));
+      blit3d_polygon_configure(object->text_quad, 3);
+      object->cache.tex = blit_framebuffer_as_texture(&buf);
+    }
+    mat4 V = ctx->view_matrix;
+    // World coord: Object * Vertex
+    // Camera coord: InvCamera * World
+    // View coord: View * Camera(ve
+    // Vertx * Object * InvCamera * View
+
+    //blit_bind_texture(&object->cache.tex);
+    //blit_quad();
+    //blit_end();
+    blit3d_context_load(blit3d);
+    blit3d_view(blit3d, mat4_mul(V, mat4_mul(C, O)));
+
+    blit3d_color(blit3d, color);
+    //mat4_print(O);vec4_print(color);logd("\n");
+    blit3d_polygon_blit(blit3d, object->text_quad);
   }
   int err = glGetError();
   if(err != 0)
@@ -212,18 +265,6 @@ float * pointer_to_floats(scheme * sc, pointer data, size_t * cnt){
   return array;
 }
 
-pointer load_poly(scheme * sc, pointer args){
-  size_t c = 0;
-  f32 * fs = pointer_to_floats(sc, args, &c);
-
-  var object =  current_context->models + current_context->current_symbol;
-  if(object->verts == NULL)
-    object->verts = blit3d_polygon_new();
-  blit3d_polygon_load_data(object->verts, fs, c * sizeof(f32));
-  blit3d_polygon_configure(object->verts, 3);
-  free(fs);
-  return sc->NIL;
-}
 
 pointer set_bg_color(scheme * sc, pointer args){
   size_t count;
@@ -247,36 +288,45 @@ u32 model_new(){
   current_context->models[newid] = (model){0};
   current_context->models[newid].scale = vec3_new(1,1,1);
   current_context->models[newid].color = vec4_new(1,1,1,1);
+  current_context->models[newid].type = 0;
   return newid;
 }
 
-u32 get_model_id_from_pair(pointer pair){
+
+
+bool get_model_id_from_pair(pointer pair, u32 * out){
   var car = pair_car(pair);
-  ASSERT(is_symbol(car) && strcmp(symname(car), "model") == 0);
-  var modelid = pair_cdr(pair);
-  ASSERT(is_integer(modelid));
-  var id = (u32)ivalue(modelid);
-  return id;
+  if(is_symbol(car) && strcmp(symname(car), "model") == 0){
+    var modelid = pair_cdr(pair);
+    ASSERT(is_integer(modelid));
+    *out = (u32)ivalue(modelid);
+    return true;
+  }
+  return false;
 }
 
-u32 get_model_id_from_args(pointer args){
+bool get_model_id_from_args(pointer args, u32 * r){
   var ptr = pair_car(args);
   // (model model-id)
-  return get_model_id_from_pair(ptr);
+  return get_model_id_from_pair(ptr, r);
 }
 
 pointer show_model(scheme * sc, pointer args){
 
-  u32 id = get_model_id_from_args(args);
-  u32_to_u32_table_set(current_context->shown_models, id, 0);
-  printf("show model %i\n", id);
+  u32 id;
+  if(get_model_id_from_args(args, &id)){
+    u32_to_u32_table_set(current_context->shown_models, id, 0);
+    printf("show model %i\n", id);
+  }
   return sc->NIL;
 }
 
 pointer unshow_model(scheme * sc, pointer args){
-  u32 id = get_model_id_from_args(args);
-  u32_to_u32_table_unset(current_context->shown_models, id);
-  printf("show model %i\n", id);
+  u32 id;
+  if(get_model_id_from_args(args, &id)){
+    u32_to_u32_table_unset(current_context->shown_models, id);
+    printf("show model %i\n", id);
+  }
   return sc->NIL; 
 
 }
@@ -300,55 +350,6 @@ pointer offset_model(scheme * sc, pointer args){
       
 }
 
-pointer scale_model(scheme * sc, pointer args){
-  size_t count;
-  f32 * f = pointer_to_floats(sc, args, &count);
-  vec3 offset;
-  if(count == 2){
-    offset = vec3_new(f[0], f[1], 0);
-  }else if(count == 3){
-    offset = vec3_new(f[0], f[1], f[2]);
-  }else{
-    goto end;
-  }
-  var object =  current_context->models + current_context->current_symbol;
-  object->scale = offset;
- end:;
-  free(f);
-  return sc->NIL; 
-      
-}
-
-
-pointer rotate_model(scheme * sc, pointer args){
-  size_t count;
-  f32 * f = pointer_to_floats(sc, args, &count);
-  vec3 offset;
-  if(count == 2){
-    offset = vec3_new(f[0], f[1], 0);
-  }else if(count == 3){
-    offset = vec3_new(f[0], f[1], f[2]);
-  }else{
-    goto end;
-  }
-  var object =  current_context->models + current_context->current_symbol;
-  object->rotation = offset;
- end:;
-  free(f);
-  return sc->NIL; 
-      
-}
-
-pointer set_color(scheme * sc, pointer args){
-  size_t count;
-  f32 * colors = pointer_to_floats(sc, args, &count);
-  if(count == 4){
-    var object =  current_context->models + current_context->current_symbol;
-    object->color = vec4_new(colors[0],colors[1],colors[2],colors[3]);
-  }
-  free(colors);
-  return sc->NIL; 
-}
 
 pointer set_perspective(scheme * sc, pointer args){
   size_t count;
@@ -452,7 +453,11 @@ pointer load_model2(scheme * sc, pointer args){
 
 pointer config_model(scheme * sc, pointer args){
   pointer ptr = pair_car(args);
-  u32 id = get_model_id_from_pair(ptr);
+  u32 id;
+  if(!get_model_id_from_pair(ptr, &id)){
+    logd("Error unable to config model\n");
+    return sc->NIL;
+  }
   ptr = pair_cdr(args);
   while(ptr != sc->NIL){
 
@@ -466,12 +471,15 @@ pointer config_model(scheme * sc, pointer args){
       bool isrotate = !iscolor && !ispoly && strcmp(symchars, "rotate") == 0;
       bool isoffset = strcmp(symchars, "offset") == 0;
       bool ismodel = strcmp(symchars, "model") == 0;
+      bool istext = strcmp(symchars, "text") == 0;
       if(ispoly || iscolor || isscale || isoffset || isrotate){
 	// this is for model data that is only floats.
 	size_t c = 0;
 	f32 * fs = pointer_to_floats(sc, pair_cdr(pt2), &c);
 	var object =  current_context->models + id;
+
 	if(ispoly){
+	  object->type = MODEL_TYPE_POLYGONAL;
 	  if(object->verts == NULL)
 	    object->verts = blit3d_polygon_new();
 	  blit3d_polygon_load_data(object->verts, fs, c * sizeof(f32));
@@ -492,9 +500,21 @@ pointer config_model(scheme * sc, pointer args){
 	free(fs);
       }
       if(ismodel){
-	u32 sub_id = get_model_id_from_pair(pt2);
-	create_sub_model(id, sub_id);
-	printf("creating sub model: %i -> %i\n", id, sub_id);
+	u32 sub_id;
+	if(get_model_id_from_pair(pt2, &sub_id)){
+	  create_sub_model(id, sub_id);
+	  printf("creating sub model: %i -> %i\n", id, sub_id);
+	}else{
+	  printf("error creating sub model\n");
+	}
+      }
+      if(istext){
+	const char * str = sc->vptr->string_value(pair_cdr(pt2));
+	printf("Create string: %s\n", str);
+	var object =  current_context->models + id;
+	object->type = MODEL_TYPE_TEXT;
+	object->text = iron_clone(str, strlen(str) + 1);
+	
       }
 
       
@@ -512,17 +532,14 @@ pointer object_id_new(scheme * sc, pointer args){
   return mk_integer(sc, (long)objectid);
 }
 
+extern unsigned char _usr_share_fonts_truetype_dejavu_DejaVuSans_ttf[];
 context * context_init(gl_window * win){
   static scheme_registerable reg[] = {
     {.f = print_result, .name = "print2"},
-    {.f = load_poly, .name = "load-poly"},
+
     {.f = set_bg_color, .name = "set-bg-color"},
     {.f = show_model, .name = "show-model"},
     {.f = unshow_model, .name = "unshow-model"},
-    {.f = set_color, .name = "set-color"},
-    {.f = scale_model, .name= "scale-model"},
-    {.f = offset_model, .name= "offset-model"},
-    {.f = rotate_model, .name="rotate-model"},
     {.f = set_perspective, .name="perspective"},
     {.f = set_orthographic, .name="orthographic"},
     {.f = set_camera, .name="set-camera"},
@@ -547,6 +564,14 @@ context * context_init(gl_window * win){
    ctx->win = win;
    ctx->view_matrix = mat4_identity();
    ctx->camera_matrix = mat4_identity();
+
+
+   // opengl must be initialized at this point!
+   
+   font * fnt =  blit_load_font_from_buffer(_usr_share_fonts_truetype_dejavu_DejaVuSans_ttf, 20);
+   blit_set_current_font(fnt);
+
+   
    return ctx;
 }
 
