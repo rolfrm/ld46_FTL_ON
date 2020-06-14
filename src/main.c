@@ -32,7 +32,7 @@ typedef struct{
   vec3 offset;
   vec3 rotation;
   vec3 scale;
-}polygon; // rename to 'model'.
+}model; // rename to 'model'.
 
 struct _context{
   gl_window * win;
@@ -40,15 +40,15 @@ struct _context{
   int running;
   scheme * sc;
 
-  polygon * polygons;
-  u32 polygon_count;
+  model * models;
+  u32 model_count;
 
-  u32_to_u32_table * poly_to_sub_object;
+  u32_to_u32_table * model_to_sub_model;
   
-  u32_to_u32_table * shown_objects;
+  u32_to_u32_table * shown_models;
 
   u32 current_symbol;
-  u32 current_sub_object;
+  u32 current_sub_model;
   mat4 view_matrix;
   mat4 camera_matrix;
 
@@ -81,28 +81,25 @@ mat4 mat4_translate_vec3(vec3 v){
   return mat4_translate(v.x, v.y, v.z);
 }
 
-void print_object_sub_objects(){
+void print_object_sub_models(){
   var ctx = current_context;
-  for(u32 i = 0; i < ctx->poly_to_sub_object->count; i++){
+  for(u32 i = 0; i < ctx->model_to_sub_model->count; i++){
     int j = i + 1;
-    var k = ctx->poly_to_sub_object->key[j];
-    var v = ctx->poly_to_sub_object->value[j];
-
+    var k = ctx->model_to_sub_model->key[j];
+    var v = ctx->model_to_sub_model->value[j];
     printf("%i -> %i\n", k, v);
-
   }
-
 }
 
 int render_it = 0;
 vec3 v3_one = {.x = 1, .y = 1, .z = 1};
-void render_polygon(context * ctx, mat4 transform, u32 id, vec4 color){
-  //print_object_sub_objects();
+void render_model(context * ctx, mat4 transform, u32 id, vec4 color){
+  //print_object_sub_models();
   //ERROR("!!");
   if(render_it > 5) ERROR("Stack\n");
   render_it += 1;
   var blit3d = ctx->blit3d;
-  var object =  ctx->polygons + id;
+  var object =  ctx->models + id;
   
   var o = object->offset.data;
   var r = object->rotation.data;
@@ -135,16 +132,16 @@ void render_polygon(context * ctx, mat4 transform, u32 id, vec4 color){
   size_t indexes[10];
   size_t cnt;
   size_t index = 0;
-  while((cnt = u32_to_u32_table_iter(ctx->poly_to_sub_object, &id, 1, NULL, indexes, array_count(indexes), &index))){
+  while((cnt = u32_to_u32_table_iter(ctx->model_to_sub_model, &id, 1, NULL, indexes, array_count(indexes), &index))){
     for(size_t i = 0 ; i < cnt; i++){
-      var sub = ctx->poly_to_sub_object->value[indexes[i]];
+      var sub = ctx->model_to_sub_model->value[indexes[i]];
       //printf("render sub\n");
 
       if(sub == id){
-	print_object_sub_objects();
+	print_object_sub_models();
 	ERROR("LOOP\n");
       }
-      render_polygon(ctx, O, sub,  color);
+      render_model(ctx, O, sub,  color);
       //printf("render done\n");
     }
   }
@@ -180,9 +177,9 @@ void render_update(context * ctx, float dt){
 
   blit3d_context_load(blit3d);
   
-  for(u32 i = 0; i < ctx->shown_objects->count; i++){
+  for(u32 i = 0; i < ctx->shown_models->count; i++){
     render_it = 0;
-    render_polygon(ctx, mat4_identity(), ctx->shown_objects->key[i + 1], vec4_new(1,1,1,1));  
+    render_model(ctx, mat4_identity(), ctx->shown_models->key[i + 1], vec4_new(1,1,1,1));  
   }
 }
 
@@ -219,7 +216,7 @@ pointer load_poly(scheme * sc, pointer args){
   size_t c = 0;
   f32 * fs = pointer_to_floats(sc, args, &c);
 
-  var object =  current_context->polygons + current_context->current_symbol;
+  var object =  current_context->models + current_context->current_symbol;
   if(object->verts == NULL)
     object->verts = blit3d_polygon_new();
   blit3d_polygon_load_data(object->verts, fs, c * sizeof(f32));
@@ -243,13 +240,13 @@ pointer print_result(scheme * sc, pointer data){
   return data;
 }
 
-u32 polygon_new(){
-  u32 newid = current_context->polygon_count;
-  current_context->polygon_count += 1;
-  current_context->polygons = realloc(current_context->polygons, sizeof(current_context->polygons[0]) * current_context->polygon_count);
-  current_context->polygons[newid] = (polygon){0};
-  current_context->polygons[newid].scale = vec3_new(1,1,1);
-  current_context->polygons[newid].color = vec4_new(1,1,1,1);
+u32 model_new(){
+  u32 newid = current_context->model_count;
+  current_context->model_count += 1;
+  current_context->models = realloc(current_context->models, sizeof(current_context->models[0]) * current_context->model_count);
+  current_context->models[newid] = (model){0};
+  current_context->models[newid].scale = vec3_new(1,1,1);
+  current_context->models[newid].color = vec4_new(1,1,1,1);
   return newid;
 }
 
@@ -271,14 +268,14 @@ u32 get_model_id_from_args(pointer args){
 pointer show_model(scheme * sc, pointer args){
 
   u32 id = get_model_id_from_args(args);
-  u32_to_u32_table_set(current_context->shown_objects, id, 0);
+  u32_to_u32_table_set(current_context->shown_models, id, 0);
   printf("show model %i\n", id);
   return sc->NIL;
 }
 
 pointer unshow_model(scheme * sc, pointer args){
   u32 id = get_model_id_from_args(args);
-  u32_to_u32_table_unset(current_context->shown_objects, id);
+  u32_to_u32_table_unset(current_context->shown_models, id);
   printf("show model %i\n", id);
   return sc->NIL; 
 
@@ -295,7 +292,7 @@ pointer offset_model(scheme * sc, pointer args){
   }else{
     goto end;
   }
-  var object =  current_context->polygons + current_context->current_symbol;
+  var object =  current_context->models + current_context->current_symbol;
   object->offset = offset;
  end:;
   free(f);
@@ -314,7 +311,7 @@ pointer scale_model(scheme * sc, pointer args){
   }else{
     goto end;
   }
-  var object =  current_context->polygons + current_context->current_symbol;
+  var object =  current_context->models + current_context->current_symbol;
   object->scale = offset;
  end:;
   free(f);
@@ -334,7 +331,7 @@ pointer rotate_model(scheme * sc, pointer args){
   }else{
     goto end;
   }
-  var object =  current_context->polygons + current_context->current_symbol;
+  var object =  current_context->models + current_context->current_symbol;
   object->rotation = offset;
  end:;
   free(f);
@@ -346,7 +343,7 @@ pointer set_color(scheme * sc, pointer args){
   size_t count;
   f32 * colors = pointer_to_floats(sc, args, &count);
   if(count == 4){
-    var object =  current_context->polygons + current_context->current_symbol;
+    var object =  current_context->models + current_context->current_symbol;
     object->color = vec4_new(colors[0],colors[1],colors[2],colors[3]);
   }
   free(colors);
@@ -394,140 +391,21 @@ pointer set_camera(scheme * sc, pointer args){
   return sc->NIL;
 }
 
-void create_sub_object(u32 polygon, u32 sub_polygon){
+void create_sub_model(u32 model, u32 sub_model){
   size_t indexes[10];
   size_t cnt;
   size_t index = 0;
   var ctx = current_context;
-  while((cnt = u32_to_u32_table_iter(ctx->poly_to_sub_object, &polygon, 1, NULL, indexes, array_count(indexes), &index))){
+  while((cnt = u32_to_u32_table_iter(ctx->model_to_sub_model, &model, 1, NULL, indexes, array_count(indexes), &index))){
     for(size_t i = 0 ; i < cnt; i++){
-      u32 ref = ctx->poly_to_sub_object->value[indexes[i]];
-      if(ref == sub_polygon)
+      u32 ref = ctx->model_to_sub_model->value[indexes[i]];
+      if(ref == sub_model)
 	return;
     }
   }
-  u32_to_u32_table_set(ctx->poly_to_sub_object, polygon, sub_polygon);
+  u32_to_u32_table_set(ctx->model_to_sub_model, model, sub_model);
 }
 
-
-/*
-u32 sym_to_sub_object(pointer arg){
-  ASSERT(is_symbol(arg));
-  u32 id;
-  var sym =  arg;
-  if(!ptr_to_u32_table_try_get(current_context->sub_object_list, &sym, &id))
-    ERROR("Unknown sub object");
-
-  return id;
-}
-
-
-
-pointer define_sub_object(scheme * sc, pointer args){
-  pointer x[3];
-  x[0] = pair_car(args);
-  args = pair_cdr(args);
-  x[1] = pair_car(args);
-  args = pair_cdr(args);
-  x[2] = pair_car(args);
-  for(int i = 0 ;i < 3; i++){
-    ASSERT(is_symbol(x[i]));
-  }
-
-  u32 id;  
-  pointer ptr =  x[0];
-  u32 a = polygon_sym_to_id(x[1]);
-  u32 b = polygon_sym_to_id(x[2]);
-  var ctx = current_context;
-  if(!ptr_to_u32_table_try_get(current_context->sub_object_list, &ptr, &id)){
-    u32 newid = ctx->sub_object_count;
-    ctx->sub_object_count += 1;
-    ctx->sub_objects = realloc(current_context->sub_objects, sizeof(current_context->sub_objects[0]) * current_context->sub_object_count);
-    ctx->sub_objects[newid] = (sub_object){0};
-    ctx->sub_objects[newid].transform = mat4_identity();
-    ctx->sub_objects[newid].color = vec4_new(1,1,1,1);
-    
-    id = newid;
-    ptr_to_u32_table_set(current_context->sub_object_list, ptr, id);
-  }
-
-  printf("Link %i %i %i\n", id, a ,b);
-  
-  size_t indexes[10];
-  size_t cnt;
-  size_t index = 0;
-  while((cnt = u32_to_u32_table_iter(ctx->poly_to_sub_object, &a, 1, NULL, indexes, array_count(indexes), &index))){
-    for(size_t i = 0 ; i < cnt; i++){
-      u32 ref = ctx->poly_to_sub_object->value[indexes[i]];
-      if(ref == id){
-	goto end;
-      }
-    }
-  }
-  u32_to_u32_table_set(ctx->poly_to_sub_object, a, id);
-
-  ctx->sub_objects[id].sub_object = b;
-
- end:
-  
-  return sc->NIL;
-  }
-
-pointer unset_sub_object(scheme * sc, pointer args){
-  var ctx = current_context;
-  pointer x[2];
-  x[0] = pair_car(args);
-  args = pair_cdr(args);
-  x[1] = pair_car(args);
-  for(int i = 0 ;i < 2; i++){
-    ASSERT(is_symbol(x[i]));
-  }
-
-  u32 sub_object_id = sym_to_sub_object(x[0]);
-  u32 a = polygon_sym_to_id(x[1]);
-  
-  size_t indexes[10];
-  size_t cnt;
-  size_t index = 0;
-  while((cnt = u32_to_u32_table_iter(ctx->poly_to_sub_object, &a, 1, NULL, indexes, array_count(indexes), &index))){
-    for(size_t i = 0 ; i < cnt; i++){
-      u32 ref = ctx->sub_object_list->value[indexes[i]];
-      if(ref == sub_object_id){
-	icy_table_remove_indexes((icy_table *)ctx->sub_object_list, indexes + i, 1);
-	goto end;
-      }
-    }
-  }
- end:
-  
-  return sc->NIL;
-}
-
-
-pointer set_sub_object_transform(scheme * sc, pointer args){
-  var name = pair_car(args);
-  u32 id = sym_to_sub_object(name);
-  args = pair_cdr(args);
-  size_t count;
-  f32 * fargs = pointer_to_floats(sc, args, &count);
-  // pos:x y z rot: x y z
-  if(count == 6){
-    
-    var m = mat4_identity();//translate(fargs[0],fargs[1],fargs[2]);
-    m.data[3][0] = fargs[0];
-    m.data[3][1] = fargs[1];
-    m.data[3][2] = fargs[2];
-    m = mat4_rotate_X(m, fargs[3]);
-    m = mat4_rotate_Y(m, fargs[4]);
-    m = mat4_rotate_Z(m, fargs[5]);
-
-    current_context->sub_objects[id].transform = m;
-  }
-  free(fargs);  
-  
-  return sc->NIL;
-}
-*/
 pointer key_is_down(scheme * sc, pointer args){
   if(is_integer(pair_car(args)) == false)
     ERROR("Key is not integer");
@@ -566,41 +444,6 @@ pointer camera_right(scheme * sc, pointer args){
 pointer get_dt(scheme * sc, pointer args){
   return sc->vptr->mk_real(sc, current_context->dt);
 }
-/*
-pointer hide_sub_object(scheme * sc, pointer args){
-  u32 id;  
-  pointer ptr = pair_car(args);
-  if(ptr_to_u32_table_try_get(current_context->sub_object_list, &ptr, &id)){
-    var obj = current_context->sub_objects + id;
-    obj->hidden = true;
-  }
-  return sc->NIL;
-}
-
-pointer show_sub_object(scheme * sc, pointer args){
-  u32 id;  
-  pointer ptr = pair_car(args);
-  if(ptr_to_u32_table_try_get(current_context->sub_object_list, &ptr, &id)){
-    var obj = current_context->sub_objects + id;
-    obj->hidden = false;
-  }
-  return sc->NIL;
-}
-
-pointer sub_object_color(scheme * sc, pointer args){
-  u32 id;  
-  pointer ptr = pair_car(args);
-  args = pair_cdr(args);
-  
-  size_t c = 0;
-  f32 * fs = pointer_to_floats(sc, args, &c);
-  
-  if(c == 4 && ptr_to_u32_table_try_get(current_context->sub_object_list, &ptr, &id)){
-    var obj = current_context->sub_objects + id;
-    obj->color = vec4_new(fs[0], fs[1], fs[2], fs[3]);
-  }
-  return sc->NIL;  
-  }*/
 
 pointer load_model2(scheme * sc, pointer args){
   printf("Load model!\n");
@@ -627,7 +470,7 @@ pointer config_model(scheme * sc, pointer args){
 	// this is for model data that is only floats.
 	size_t c = 0;
 	f32 * fs = pointer_to_floats(sc, pair_cdr(pt2), &c);
-	var object =  current_context->polygons + id;
+	var object =  current_context->models + id;
 	if(ispoly){
 	  if(object->verts == NULL)
 	    object->verts = blit3d_polygon_new();
@@ -650,7 +493,7 @@ pointer config_model(scheme * sc, pointer args){
       }
       if(ismodel){
 	u32 sub_id = get_model_id_from_pair(pt2);
-	create_sub_object(id, sub_id);
+	create_sub_model(id, sub_id);
 	printf("creating sub model: %i -> %i\n", id, sub_id);
       }
 
@@ -665,7 +508,7 @@ pointer config_model(scheme * sc, pointer args){
 }
 
 pointer object_id_new(scheme * sc, pointer args){
-  u32 objectid = polygon_new();  
+  u32 objectid = model_new();  
   return mk_integer(sc, (long)objectid);
 }
 
@@ -697,9 +540,9 @@ context * context_init(gl_window * win){
    scheme_set_output_port_file(sc, stdout);
    scheme_register_foreign_func_list(sc, reg, array_count(reg));
    current_context = ctx;
-   ctx->shown_objects = u32_to_u32_table_create(NULL);
-   ctx->poly_to_sub_object = u32_to_u32_table_create(NULL);
-   ((bool *) &ctx->poly_to_sub_object->is_multi_table)[0] = true;
+   ctx->shown_models = u32_to_u32_table_create(NULL);
+   ctx->model_to_sub_model = u32_to_u32_table_create(NULL);
+   ((bool *) &ctx->model_to_sub_model->is_multi_table)[0] = true;
    ctx->running = 1;
    ctx->win = win;
    ctx->view_matrix = mat4_identity();
@@ -709,9 +552,9 @@ context * context_init(gl_window * win){
 
 
 void context_load_lisp(context * ctx, const char * file){
-  u32_to_u32_table_clear(ctx->shown_objects);
-  u32_to_u32_table_clear(ctx->poly_to_sub_object);
-  ctx->polygon_count = 0;
+  u32_to_u32_table_clear(ctx->shown_models);
+  u32_to_u32_table_clear(ctx->model_to_sub_model);
+  ctx->model_count = 0;
   var fin = fopen(file, "r");
   scheme_load_named_file(ctx->sc, fin, file);
   fclose(fin);  
