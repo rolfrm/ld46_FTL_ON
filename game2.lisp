@@ -128,13 +128,14 @@
 		   )
 	     (scale 1 0.5 1)
 	     (offset 0 1.0 -7)
-	     (color 0.5 0.5 0.5 1))
+	     (color 0.5 0.5 0.5 1.0))
 
 	    (model
-	     ;(text "Hello world!")
+	     (text "Hello Beautiful!!")
 	     ;unit-quad
-	     (offset 0 0 6)
-	     (color 1 0 0 1)
+	     (offset -3 4.5 2)
+	     (color 0 0 0 1)
+	     (scale 0.23 0.23 1)
 	     )
 	    (model
 	     (rect 5 1)

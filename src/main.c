@@ -39,6 +39,7 @@ typedef struct{
       char * text;
       text_cache cache;
       blit3d_polygon * text_quad;
+      blit3d_polygon * uv_quad;
     };
   };
   vec4 color;
@@ -106,6 +107,7 @@ void print_object_sub_models(){
 
 int render_it = 0;
 vec3 v3_one = {.x = 1, .y = 1, .z = 1};
+bool alpha_pass = false;
 void render_model(context * ctx, mat4 transform, u32 id, vec4 color){
   //print_object_sub_models();
   //ERROR("!!");
@@ -123,11 +125,16 @@ void render_model(context * ctx, mat4 transform, u32 id, vec4 color){
 
   }
   color = vec4_mul(object->color, color);
+  if(color.w <= 0.0)
+    return;
+  if(color.w < 1.0 && alpha_pass == false) return;
+  
   mat4 C = mat4_invert(ctx->camera_matrix);
   
   O = mat4_mul(transform, O);
   
   if(object->type == MODEL_TYPE_POLYGONAL && object->verts != NULL){
+    if(color.w >= 1.0 && alpha_pass == false){
     mat4 V = ctx->view_matrix;
     // World coord: Object * Vertex
     // Camera coord: InvCamera * World
@@ -136,9 +143,11 @@ void render_model(context * ctx, mat4 transform, u32 id, vec4 color){
     
     blit3d_view(blit3d, mat4_mul(V, mat4_mul(C, O)));
     blit3d_color(blit3d, color);
-    blit3d_polygon_blit(blit3d, object->verts);
+    blit3d_polygon_blit2(blit3d, &object->verts, 1);
+    }
+    
   }
-  if(object->type == MODEL_TYPE_TEXT && object->text != NULL){
+  if(object->type == MODEL_TYPE_TEXT && object->text != NULL && alpha_pass){
     
     if(object->cache.loaded == false){
       printf("Loading texture cache\n");
@@ -149,18 +158,46 @@ void render_model(context * ctx, mat4 transform, u32 id, vec4 color){
 
       //image tex_img = {.width = (int)dim.x, .height = (int)dim.y, .channels = 2, .mode = GRAY_AS_ALPHA};
       //texture tex = texture_from_image(&tex_img);
-      blit_framebuffer buf = {.width = (int)dim.x, .height = (int)dim.y};
+      blit_framebuffer buf = {.width = (int)dim.x, .height = (int)dim.y,
+			      .channels = 1, .mode = GRAY_AS_ALPHA};
+      
       blit_create_framebuffer(&buf);
-      //blit_use_framebuffer(&buf);
-      blit_begin(BLIT_MODE_UNIT);
-      blit_rectangle2(1, 0 ,0, 1);
-      blit_unuse_framebuffer();
+      blit_use_framebuffer(&buf);
+      glViewport(0, 0, dim.x, dim.y);
+      glClearColor(0, 0, 0, 0);
+      glClear(GL_COLOR_BUFFER_BIT);
+      glEnable(GL_BLEND);
+      blit_begin(BLIT_MODE_PIXEL_SCREEN);
+      blit_color(1, 1, 1, 1);
+      blit_translate(-dim.x / 2, -15);
+      blit_text(object->text);
+      blit_unuse_framebuffer(&buf);
+      
       blit3d_context_load(blit3d);
       object->text_quad = blit3d_polygon_new();
-      float xy[] = {-1,-1,0, 1,-1,0, -1,1,0, 1,1,0};
+      float aspect = dim.x / dim.y;
+      
+      float xy[] = {-1 * aspect,-1,0, 1 * aspect,-1,0, -1 * aspect,1,0, 1 * aspect,1,0};
+
       blit3d_polygon_load_data(object->text_quad, xy, 12 * sizeof(f32));
       blit3d_polygon_configure(object->text_quad, 3);
+      glEnable(GL_BLEND);
+      object->uv_quad = blit3d_polygon_new();
+      float uv[] = {0,0, 1,0,0,1,1,1};
+      blit3d_polygon_load_data(object->uv_quad, uv, 8 * sizeof(f32));
+      blit3d_polygon_configure(object->uv_quad, 2);
+
       object->cache.tex = blit_framebuffer_as_texture(&buf);
+      /*
+      u8 checker[] ={0, 255, 0, 255, 0,
+		     255, 0, 255,0 ,255,
+		     0, 255, 0, 255, 0,
+		     255, 0, 255 ,0, 255,
+		     0, 255, 0, 255, 0};
+      var img = image_from_bitmap(checker, 5, 5, 1);
+      object->cache.tex = texture_from_image(&img);
+      */
+      
     }
     mat4 V = ctx->view_matrix;
     // World coord: Object * Vertex
@@ -171,12 +208,17 @@ void render_model(context * ctx, mat4 transform, u32 id, vec4 color){
     //blit_bind_texture(&object->cache.tex);
     //blit_quad();
     //blit_end();
-    blit3d_context_load(blit3d);
+    //blit3d_context_load(blit3d);
+    glEnable(GL_BLEND);
     blit3d_view(blit3d, mat4_mul(V, mat4_mul(C, O)));
 
     blit3d_color(blit3d, color);
+    blit3d_bind_texture(blit3d, &object->cache.tex);
+    //printf("%i %i\n", object->cache.tex.width,object->cache.tex.height);
     //mat4_print(O);vec4_print(color);logd("\n");
-    blit3d_polygon_blit(blit3d, object->text_quad);
+    vertex_buffer * buffers[2] = {object->text_quad, object->uv_quad};
+    blit3d_polygon_blit2(blit3d, buffers, 1);
+    blit3d_bind_texture(blit3d, NULL);
   }
   int err = glGetError();
   if(err != 0)
@@ -229,7 +271,13 @@ void render_update(context * ctx, float dt){
   glCullFace(GL_BACK);
 
   blit3d_context_load(blit3d);
-  
+  alpha_pass = false;  
+  for(u32 i = 0; i < ctx->shown_models->count; i++){
+    render_it = 0;
+    render_model(ctx, mat4_identity(), ctx->shown_models->key[i + 1], vec4_new(1,1,1,1));  
+  }
+
+  alpha_pass = true;
   for(u32 i = 0; i < ctx->shown_models->count; i++){
     render_it = 0;
     render_model(ctx, mat4_identity(), ctx->shown_models->key[i + 1], vec4_new(1,1,1,1));  
