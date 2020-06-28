@@ -86,9 +86,6 @@ int main(int argc, char ** argv){
   
   var ctx = context_init(win);
 
-  
-  font * fnt =  blit_load_font_from_buffer(_usr_share_fonts_truetype_dejavu_DejaVuSans_ttf, 20);
-    blit_set_current_font(fnt);
     
   context_load_lisp(ctx, "init.scm");
   context_load_lisp(ctx, "init.lisp");

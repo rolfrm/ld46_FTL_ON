@@ -55,10 +55,12 @@
      (scale 0.5 0.5 1)
 
      (model
-      (poly 0 0 0
+      (poly
+       0 0 0
 	   1 0 0
 	   0 1 0
 	   1 1 0)
+
       (color 0.25 0.25 0.25 1)
       (offset -2.5 -2.5 -1)
       (scale 4 4 1)
@@ -68,12 +70,12 @@
       (poly 0 0 0
 	    1 0 0
 	    0.5 1 0)
-      (color 1.0 0.3 0.0 1))
+      (color 1.0 1.0 1.0 1))
      (model
-	       (poly 0 0 0
-		     1 0 0
-		     0 1 0
-		     1 1 0)
+            (poly 0 0 0
+	    1 0 0
+	    0.5 1 0)
+
 	       (color 1.0 1.0 1.0 1)
 	       (offset -2 0 0)
 	       )
@@ -83,7 +85,7 @@
 	    0.5 -1 0)
       (color 1.0 1.0 1.0 1)
       (scale 2 1 1)
-      (offset -1.5 -0.5 0)
+      (offset -1.5 -0.9 0)
       )
      )
   )
@@ -133,9 +135,9 @@
 	    (model
 	     (text "Hello Beautiful!!")
 	     ;unit-quad
-	     (offset -3 4.5 2)
-	     (color 0 0 0 1)
-	     (scale 0.23 0.23 1)
+	     (offset -0 4.5 2)
+	     (color 0.2 0 0 1)
+	     (scale 0.4 0.4 1)
 	     )
 	    (model
 	     (rect 5 1)

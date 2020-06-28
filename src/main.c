@@ -159,17 +159,18 @@ void render_model(context * ctx, mat4 transform, u32 id, vec4 color){
       //image tex_img = {.width = (int)dim.x, .height = (int)dim.y, .channels = 2, .mode = GRAY_AS_ALPHA};
       //texture tex = texture_from_image(&tex_img);
       blit_framebuffer buf = {.width = (int)dim.x, .height = (int)dim.y,
-			      .channels = 1, .mode = GRAY_AS_ALPHA};
+			      .channels = 4};
       
+      blit_begin(BLIT_MODE_PIXEL_SCREEN);
       blit_create_framebuffer(&buf);
       blit_use_framebuffer(&buf);
+
       glViewport(0, 0, dim.x, dim.y);
       glClearColor(0, 0, 0, 0);
       glClear(GL_COLOR_BUFFER_BIT);
       glEnable(GL_BLEND);
       blit_begin(BLIT_MODE_PIXEL_SCREEN);
       blit_color(1, 1, 1, 1);
-      blit_translate(-dim.x / 2, -15);
       blit_text(object->text);
       blit_unuse_framebuffer(&buf);
       
@@ -188,16 +189,6 @@ void render_model(context * ctx, mat4 transform, u32 id, vec4 color){
       blit3d_polygon_configure(object->uv_quad, 2);
 
       object->cache.tex = blit_framebuffer_as_texture(&buf);
-      /*
-      u8 checker[] ={0, 255, 0, 255, 0,
-		     255, 0, 255,0 ,255,
-		     0, 255, 0, 255, 0,
-		     255, 0, 255 ,0, 255,
-		     0, 255, 0, 255, 0};
-      var img = image_from_bitmap(checker, 5, 5, 1);
-      object->cache.tex = texture_from_image(&img);
-      */
-      
     }
     mat4 V = ctx->view_matrix;
     // World coord: Object * Vertex
@@ -205,17 +196,11 @@ void render_model(context * ctx, mat4 transform, u32 id, vec4 color){
     // View coord: View * Camera(ve
     // Vertx * Object * InvCamera * View
 
-    //blit_bind_texture(&object->cache.tex);
-    //blit_quad();
-    //blit_end();
-    //blit3d_context_load(blit3d);
     glEnable(GL_BLEND);
     blit3d_view(blit3d, mat4_mul(V, mat4_mul(C, O)));
 
     blit3d_color(blit3d, color);
     blit3d_bind_texture(blit3d, &object->cache.tex);
-    //printf("%i %i\n", object->cache.tex.width,object->cache.tex.height);
-    //mat4_print(O);vec4_print(color);logd("\n");
     vertex_buffer * buffers[2] = {object->text_quad, object->uv_quad};
     blit3d_polygon_blit2(blit3d, buffers, 1);
     blit3d_bind_texture(blit3d, NULL);
@@ -534,16 +519,16 @@ pointer config_model(scheme * sc, pointer args){
 	  blit3d_polygon_configure(object->verts, 3);
 	}else if(iscolor){
 	  memcpy(object->color.data, fs, MIN(4, c) * sizeof(fs[0]));
-	  printf("COLOR: ");vec4_print(object->color);printf("\n");
+	  //printf("COLOR: ");vec4_print(object->color);printf("\n");
 	}else if(isscale){
 	  memcpy(object->scale.data, fs, MIN(3, c) * sizeof(fs[0]));
-	  printf("SCALE: ");vec3_print(object->scale);printf("\n");
+	  //printf("SCALE: ");vec3_print(object->scale);printf("\n");
 	}else if(isoffset){
 	  memcpy(object->offset.data, fs, MIN(3, c) * sizeof(fs[0]));
-	  printf("OFFSET: ");vec3_print(object->scale);printf("\n");
+	  //printf("OFFSET: ");vec3_print(object->scale);printf("\n");
 	}else if(isrotate){
 	  memcpy(object->rotation.data, fs, MIN(3, c) * sizeof(fs[0]));
-	  printf("ROTATE: ");vec3_print(object->rotation);printf("\n");
+	  //printf("ROTATE: ");vec3_print(object->rotation);printf("\n");
 	}
 	free(fs);
       }
@@ -551,22 +536,19 @@ pointer config_model(scheme * sc, pointer args){
 	u32 sub_id;
 	if(get_model_id_from_pair(pt2, &sub_id)){
 	  create_sub_model(id, sub_id);
-	  printf("creating sub model: %i -> %i\n", id, sub_id);
+	  //printf("creating sub model: %i -> %i\n", id, sub_id);
 	}else{
 	  printf("error creating sub model\n");
 	}
       }
       if(istext){
 	const char * str = sc->vptr->string_value(pair_cdr(pt2));
-	printf("Create string: %s\n", str);
 	var object =  current_context->models + id;
 	object->type = MODEL_TYPE_TEXT;
 	object->text = iron_clone(str, strlen(str) + 1);
 	
       }
 
-      
-      printf("jaaa %i %s\n", sym, symchars);
     }
     ptr = pair_cdr(ptr);
   }
@@ -582,6 +564,10 @@ pointer object_id_new(scheme * sc, pointer args){
 
 extern unsigned char _usr_share_fonts_truetype_dejavu_DejaVuSans_ttf[];
 context * context_init(gl_window * win){
+  font * fnt =  blit_load_font_from_buffer(_usr_share_fonts_truetype_dejavu_DejaVuSans_ttf, 70);
+  printf("Loaded font: %p\n", fnt);
+  blit_set_current_font(fnt);
+  
   static scheme_registerable reg[] = {
     {.f = print_result, .name = "print2"},
 
@@ -616,8 +602,7 @@ context * context_init(gl_window * win){
 
    // opengl must be initialized at this point!
    
-   font * fnt =  blit_load_font_from_buffer(_usr_share_fonts_truetype_dejavu_DejaVuSans_ttf, 20);
-   blit_set_current_font(fnt);
+
 
    
    return ctx;
