@@ -1,26 +1,4 @@
-(define (poly . elems)
-    (cons 'poly elems))
-(define (color . elems)
-    (cons 'color elems))
-(define (scale . elems)
-    (cons 'scale elems))
-(define (offset . elems)
-    (cons 'offset elems))
-(define (rotate . elems)
-    (cons 'rotate elems))
-(define (name . elems)
-    (cons 'name elems))
-(define (text str)
-    (cons 'text str))
-
-(define (load-model) (cons 'model (object-new)))
-(define --empty-- (load-model))
-
-(define (model . model-data)
-    (let ((m (load-model)))
-      (apply config-model m model-data)
-      m))
-
+(load "pre.lisp")
 (define show-side-view #f)
 (if show-side-view
     (begin
