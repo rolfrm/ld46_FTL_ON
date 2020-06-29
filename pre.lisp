@@ -20,6 +20,8 @@
     (cons 'texture elems))
 (define (text str)
     (cons 'text str))
+(define (alpha . elems)
+    (cons 'alpha elems))
 
 (define (load-model) (cons 'model (object-new)))
 (define --empty-- (load-model))

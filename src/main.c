@@ -37,7 +37,7 @@ typedef struct{
   blit3d_polygon * verts;
   blit3d_polygon * uvs;
   text_cache cache;
-      
+  u32 view_id;      
   union{
     
   //distance_field_model * dist;
@@ -45,7 +45,7 @@ typedef struct{
       char * text;
     };
     struct{
-      u32 view_id;
+
       
     };
   };
@@ -67,6 +67,8 @@ typedef struct{
   mat4 view_matrix;
   mat4 camera_matrix;
   u32 model;
+  bool loaded;
+  bool alpha;
 
 }view;
 struct _context{
@@ -156,7 +158,51 @@ void render_model(context * ctx, mat4 transform, u32 id, vec4 color){
   mat4 C = mat4_invert(ctx->camera_matrix);
   
   O = mat4_mul(transform, O);
+  var view = ctx->views + object->view_id;
+  if(object->view_id != 0){
+    if(view->loaded == false && view->model != 0){
+      var dim = view->dim_px;
+      if(dim.x <= 0.5 || dim.y <= 0.5)
+	dim = view->dim_px = vec2_new(512, 512);
+      blit_framebuffer buf = {.width = (int)dim.x, .height = (int)dim.y,
+			      .channels = view->alpha ? 4 : 3};
+      
+      blit_begin(BLIT_MODE_PIXEL_SCREEN);
+      blit_create_framebuffer(&buf);
+      blit_use_framebuffer(&buf);
 
+
+      view->loaded = true;
+      
+      glViewport(0, 0, dim.x, dim.y);
+      glClearColor(0.0, 0.0, 0, 0);
+      glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+      glEnable(GL_BLEND);
+      blit3d_context_load(blit3d);
+      bool pass = alpha_pass;
+      var view_matrix = ctx->view_matrix;
+      var camera_matrix = ctx->camera_matrix;
+      ctx->view_matrix = view->view_matrix;
+      ctx->camera_matrix = view->camera_matrix;
+      
+      alpha_pass = false;
+      render_model(ctx, mat4_identity(), view->model, vec4_new(1,1,1,1));
+      alpha_pass = true;
+      render_model(ctx, mat4_identity(), view->model, vec4_new(1,1,1,1));
+      blit_unuse_framebuffer(&buf);
+      blit3d_context_load(blit3d);
+
+      alpha_pass = pass;
+      ctx->view_matrix = view_matrix;
+      ctx->camera_matrix = camera_matrix;
+      
+      view->tex = blit_framebuffer_as_texture(&buf);
+      
+    }
+  }
+  if(object->view_id == 0 || view->loaded == false)
+    view = NULL;
+  
   if(object->cache.loaded == false){
     if(object->cache.path != NULL){
       image img = image_from_file(object->cache.path);
@@ -171,8 +217,6 @@ void render_model(context * ctx, mat4 transform, u32 id, vec4 color){
       }else{
 	printf("Failed to load texture from \"%s\"\n", object->cache.path);
       }
-
-
     }
   if(object->type == MODEL_TYPE_TEXT && object->text != NULL && alpha_pass){
     printf("Loading texture cache\n");
@@ -216,7 +260,10 @@ void render_model(context * ctx, mat4 transform, u32 id, vec4 color){
   }
   
   if((object->type == MODEL_TYPE_POLYGONAL || object->type == MODEL_TYPE_TEXT) && object->verts != NULL){
-    if((color.w >= 1.0 && alpha_pass == false && object->cache.alpha == false) || (object->cache.alpha && alpha_pass)){
+    bool isalpha = color.w < 1.0 || (object->cache.loaded && object->cache.alpha) || (view != NULL && view->alpha);
+
+    
+    if((!isalpha && alpha_pass == false) || (isalpha && alpha_pass)){
       mat4 V = ctx->view_matrix;
       // World coord: Object * Vertex
       // Camera coord: InvCamera * World
@@ -228,11 +275,17 @@ void render_model(context * ctx, mat4 transform, u32 id, vec4 color){
 	bufcnt = 2;
       if(object->cache.loaded)
 	blit3d_bind_texture(blit3d, &object->cache.tex);
+      else if(view != NULL){
+	blit3d_bind_texture(blit3d, &view->tex);
+      }
       blit3d_view(blit3d, mat4_mul(V, mat4_mul(C, O)));
       blit3d_color(blit3d, color);
       blit3d_polygon_blit2(blit3d, buffers, bufcnt);
       if(object->cache.loaded)
 	blit3d_bind_texture(blit3d, NULL);
+      else if(view != NULL){
+	blit3d_bind_texture(blit3d, NULL);
+      }
     }
   }
 
@@ -535,49 +588,45 @@ pointer get_dt(scheme * sc, pointer args){
   return sc->vptr->mk_real(sc, current_context->dt);
 }
 
-pointer load_model2(scheme * sc, pointer args){
-  printf("Load model!\n");
-  return sc->NIL;
-}
-
 pointer config_model(scheme * sc, pointer args){
   pointer ptr = pair_car(args);
   u32 id;
 
   if(get_view_id_from_pair(ptr, &id)){
     var object =  current_context->views + id;
-    printf("VIEW!\n");
-
     ptr = pair_cdr(args);    
     while(ptr != sc->NIL){
       pointer pt2 = pair_car(ptr); //(poly 1 2 3)
       pointer sym = pair_car(pt2);
       char * symchars = symname(sym);
-      printf("SYM: %s\n", symchars);
       if(is_symbol(sym)){
 	bool ismodel = strcmp(symchars, "model") == 0;
 	bool isortho = strcmp(symchars, "ortho") == 0;
 	bool issize = strcmp(symchars, "size") == 0;
+	bool isalpha = strcmp(symchars, "alpha") == 0;
 	if(ismodel){
 	  u32 subid;
 	  
 	  if(get_model_id_from_pair(pt2, &subid)){
-	    printf("View model:%i\n", subid);
 	    object->model = subid;
 	  }
 	}
+	if(isalpha)
+	  object->alpha = true;
 	if(isortho || issize){
 	  size_t c = 0;
 	  f32 * fs = pointer_to_floats(sc, pair_cdr(pt2), &c);
 	  if(issize){
-	    if(c == 1){
+	    if(c == 1)
 	      object->dim_px = vec2_new(fs[0], fs[0]); 
-	    }else if(c >= 2){
+	    else if(c >= 2)
 	      object->dim_px = vec2_new(fs[0], fs[1]); 
-	    }
-	    logd("View size: ");
-	    vec2_print(object->dim_px);
-	    logd("\n");
+	  }
+	  else if(isortho){
+	    if(c == 6)
+	      object->view_matrix = mat4_ortho(fs[0], fs[1], fs[2], fs[3], fs[4], fs[5]);
+	    if(c == 3)
+	      object->view_matrix = mat4_ortho(- 0.5 * fs[0], 0.5 * fs[0], -0.5 * fs[1], 0.5 * fs[1], -0.5 * fs[2], 0.5 * fs[2]);  
 	  }
 	  dealloc(fs);
 	}
@@ -609,6 +658,7 @@ pointer config_model(scheme * sc, pointer args){
       bool ismodel = strcmp(symchars, "model") == 0;
       bool istexture = strcmp(symchars, "texture") == 0;
       bool istext = !istexture && strcmp(symchars, "text") == 0;
+      bool isview = strcmp(symchars, "view") == 0;
 
       bool isuv = strcmp(symchars, "uv") == 0;
       if(ispoly || iscolor || isscale || isoffset || isrotate || isuv){
@@ -644,6 +694,7 @@ pointer config_model(scheme * sc, pointer args){
 	}
 	free(fs);
       }
+      var object =  current_context->models + id;
       if(ismodel){
 	u32 sub_id;
 	if(get_model_id_from_pair(pt2, &sub_id)){
@@ -653,13 +704,17 @@ pointer config_model(scheme * sc, pointer args){
 	  printf("error creating sub model\n");
 	}
       }
+      if(isview){
+	u32 sub_id;
+	if(get_view_id_from_pair(pt2, &sub_id))
+	  object->view_id = sub_id;
+      }
+
+      
       if(istexture){
 	const char * str = sc->vptr->string_value(pair_cdr(pt2));
-	if(str != NULL){
-	  var object =  current_context->models + id;
-	  printf("texture: %s\n", str);
+	if(str != NULL)
 	  object->cache.path = iron_clone(str, strlen(str) + 1);
-	}
       }
       if(istext){
 	const char * str = sc->vptr->string_value(pair_cdr(pt2));
@@ -729,9 +784,6 @@ context * context_init(gl_window * win){
 
    // opengl must be initialized at this point!
    
-
-
-   
    return ctx;
 }
 
@@ -739,7 +791,9 @@ context * context_init(gl_window * win){
 void context_load_lisp(context * ctx, const char * file){
   u32_to_u32_table_clear(ctx->shown_models);
   u32_to_u32_table_clear(ctx->model_to_sub_model);
+  u32_to_u32_table_clear(ctx->model_to_sub_model);
   ctx->model_count = 0;
+  ctx->view_count = 0;
   var fin = fopen(file, "r");
   scheme_load_named_file(ctx->sc, fin, file);
   fclose(fin);  
