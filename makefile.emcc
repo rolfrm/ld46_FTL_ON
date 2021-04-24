@@ -1,4 +1,7 @@
 OPT = -O3 -g0
+
+LISP_FILES = $(wildcard *.lisp) $(wildcard *.scm)
+LISP_FILES2 = $(foreach file,$(LISP_FILES),--embed-file $(file))
 SOURCES1 = main_emcc.c scheme.c main.c tables.c
 SOURCES = $(addprefix src/, $(SOURCES1))
 
@@ -9,14 +12,14 @@ LDFLAGS= -s USE_GLFW=3 -s WASM=1 -s USE_WEBGL2=1 -s 'EXTRA_EXPORTED_RUNTIME_METH
 LIBS= ../iron/libiron.bc ../libicydb/libicydb.bc
 CFLAGS = -DUSE_STRLWR=0 -std=c11 -I.. -I../libicydb/include -c $(OPT) -Wall -Wextra -Werror=implicit-function-declaration -Wformat=0 -D_GNU_SOURCE  -fdiagnostics-color -s WASM=1 -s USE_GLFW=3 -s 'EXTRA_EXPORTED_RUNTIME_METHODS=["ccall", "cwrap"]' #-s DISABLE_DEPRECATED_FIND_EVENT_TARGET_BEHAVIOR=1  #-s 'EXTRA_EXPORTED_RUNTIME_METHODS=["ccall", "cwrap"]' -s EXPORTED_FUNCTIONS="['_c_volume', '_main']"
 all: $(TARGET)
-$(TARGET): $(OBJECTS) ../libicydb/libicydb.bc
-	$(CC) $(LDFLAGS) $(OBJECTS) $(LIBS) -o $@ 
+$(TARGET): $(OBJECTS) ../libicydb/libicydb.bc $(LISP_FILES)
+	$(CC) $(LDFLAGS) $(OBJECTS) $(LIBS) -o $@ $(LISP_FILES2)
 src/main.c:  src/lisp.c
 
-src/lisp.c: model.lisp init.scm init.lisp
+src/lisp.c: game2.lisp init.scm init.lisp
 	xxd -i init.scm > src/lisp.c
 	xxd -i init.lisp >> src/lisp.c
-	xxd -i model.lisp >> src/lisp.c	
+	xxd -i game2.lisp >> src/lisp.c	
 
 %.bc: %.c $(HEADERS) ../iron/libiron.bc
 	$(CC) -s WASM=1 $(CFLAGS) $< -o $@ -MMD -MF $@.depends

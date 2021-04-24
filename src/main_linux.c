@@ -54,24 +54,10 @@ void * iron_clone(const void * src, size_t s){
   return out;
 }
 
-
-void log_print(log_level level, const char * fmt, ...){
-  UNUSED(level);
-  va_list args;
-  va_start (args, fmt);
-  vprintf(fmt, args);
-  va_end(args);
-}
-
-
-
-
 int prev_width = 0, prev_height = 0;
 
 bool firstTime = true;
 
-
-int logd_enable = 1;
 
 extern unsigned char _usr_share_fonts_truetype_dejavu_DejaVuSans_ttf[];
 

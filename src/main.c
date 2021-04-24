@@ -7,6 +7,7 @@
 #include <stdarg.h>
 #include <iron/full.h>
 #include <iron/gl.h>
+#include <iron/audio.h>
 #include <stdarg.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -18,11 +19,17 @@
 #include "main.h"
 
 typedef enum{
-  MODEL_TYPE_POLYGONAL = 100,
-  MODEL_TYPE_TEXT = 200,
-  MODEL_TYPE_FONT = 300, // sets the font for every sub element
-
+	     MODEL_TYPE_POLYGONAL = 100,
+	     MODEL_TYPE_TEXT = 200,
+	     MODEL_TYPE_FONT = 300, // sets the font for every sub element
 }model_type;
+
+typedef enum{
+	     MODEL_MODE_NONE = 0,
+	     MODEL_MODE_COLOR = 1,
+	     MODEL_MODE_OFFSET = 2,
+	     MODEL_MODE_SCALE= 4
+}model_mode;
 
 typedef struct{
   vec2 dim_px;
@@ -34,6 +41,7 @@ typedef struct{
 
 typedef struct{
   model_type type;
+  model_mode mode;
   blit3d_polygon * verts;
   blit3d_polygon * uvs;
   text_cache cache;
@@ -43,10 +51,6 @@ typedef struct{
   //distance_field_model * dist;
     struct {
       char * text;
-    };
-    struct{
-
-      
     };
   };
   vec4 color;
@@ -77,6 +81,7 @@ struct _context{
   int running;
   scheme * sc;
 
+  audio_context * audio;
   model * models;
   u32 model_count;
 
@@ -101,7 +106,7 @@ struct _context{
 
 context * current_context;
 
-mat4 rotate_offset_3d_transform(float x, float y, float z, float rx, float ry, float rz){
+mat4 mat3_rotate_3d_transform(float x, float y, float z, float rx, float ry, float rz){
   var m = mat4_identity();
   m.data[3][0] = x;
   m.data[3][1] = y;
@@ -145,12 +150,13 @@ void render_model(context * ctx, mat4 transform, u32 id, vec4 color){
   var o = object->offset.data;
   var r = object->rotation.data;
   var s = object->scale;
-  var O = rotate_offset_3d_transform(o[0], o[1], o[2], r[0], r[1], r[2]);
+  var O = mat3_rotate_3d_transform(o[0], o[1], o[2], r[0], r[1], r[2]);
   if(vec3_compare(v3_one, s, 0.0001) == false){
     O = mat4_mul(O, mat4_scaled(s.x, s.y, s.z));
 
   }
-  color = vec4_mul(object->color, color);
+  if(object->mode & MODEL_MODE_COLOR)
+    color = vec4_mul(object->color, color);
   if(color.w <= 0.0)
     return;
   if(color.w < 1.0 && alpha_pass == false) return;
@@ -184,10 +190,13 @@ void render_model(context * ctx, mat4 transform, u32 id, vec4 color){
       var camera_matrix = ctx->camera_matrix;
       ctx->view_matrix = view->view_matrix;
       ctx->camera_matrix = view->camera_matrix;
-      
+      glDisable(GL_BLEND);      
+      glEnable(GL_DEPTH_TEST);
       alpha_pass = false;
       render_model(ctx, mat4_identity(), view->model, vec4_new(1,1,1,1));
       alpha_pass = true;
+      glEnable(GL_BLEND);
+
       render_model(ctx, mat4_identity(), view->model, vec4_new(1,1,1,1));
       blit_unuse_framebuffer(&buf);
       blit3d_context_load(blit3d);
@@ -222,6 +231,8 @@ void render_model(context * ctx, mat4 transform, u32 id, vec4 color){
     printf("Loading texture cache\n");
     vec2 dim = blit_measure_text(object->text);
     vec2_print(dim);logd("\n");
+    if(dim.x > 0 && dim.y > 0){
+    
     object->cache.dim_px = dim;
     object->cache.loaded = true;
     object->cache.alpha = true;
@@ -256,7 +267,8 @@ void render_model(context * ctx, mat4 transform, u32 id, vec4 color){
     blit3d_polygon_load_data(object->uvs, uv, 8 * sizeof(f32));
     blit3d_polygon_configure(object->uvs, 2);
     object->cache.tex = blit_framebuffer_as_texture(&buf);
-  }
+    }
+    }
   }
   
   if((object->type == MODEL_TYPE_POLYGONAL || object->type == MODEL_TYPE_TEXT) && object->verts != NULL){
@@ -319,12 +331,12 @@ void render_update(context * ctx, float dt){
     size_t cnt = gl_get_events(evt, array_count(evt));
     for(size_t i = 0; i < cnt; i++){
       if(evt[i].type == EVT_KEY_DOWN){
-	//printf("%i \n", evt[i].key.key);
+	//printf("%i %i\n", evt[i].key.scancode, evt[i].key.key, KEY_LEFT);
       }
     }
   }
-
-
+  //printf("Update!\n");
+  audio_update_streams(ctx->audio);
   scheme_load_string(ctx->sc, "(update)");
   current_context = ctx;
   current_context->dt = dt;
@@ -526,7 +538,7 @@ pointer set_camera(scheme * sc, pointer args){
   // pos:x y z rot: x y z
   if(count == 6){
     
-    var m = rotate_offset_3d_transform(fargs[0], fargs[1], fargs[2],
+    var m = mat3_rotate_3d_transform(fargs[0], fargs[1], fargs[2],
 				       fargs[3], fargs[4], fargs[5]);
     current_context->camera_matrix = m;
   }
@@ -681,7 +693,8 @@ pointer config_model(scheme * sc, pointer args){
 
 	}else if(iscolor){
 	  memcpy(object->color.data, fs, MIN(4, c) * sizeof(fs[0]));
-	  //printf("COLOR: ");vec4_print(object->color);printf("\n");
+	  object->mode |= MODEL_MODE_COLOR;
+	  printf("COLOR: ");vec4_print(object->color);printf("\n");
 	}else if(isscale){
 	  memcpy(object->scale.data, fs, MIN(3, c) * sizeof(fs[0]));
 	  //printf("SCALE: ");vec3_print(object->scale);printf("\n");
@@ -728,7 +741,7 @@ pointer config_model(scheme * sc, pointer args){
     ptr = pair_cdr(ptr); 
   }
   //ASSERT(is_list(ptr));
-  printf("Config model! %i\n", id);
+  //printf("Config model! %i\n", id);
   return sc->NIL;
 }
 
@@ -748,7 +761,17 @@ context * context_init(gl_window * win){
   printf("Loaded font: %p\n", fnt);
   blit_set_current_font(fnt);
   
-  static scheme_registerable reg[] = {
+  audio_context * audio  = audio_initialize(44100);
+  
+   f32 * data =alloc0(sizeof(data[0]) * 4024);
+  for(int i = 0; i < 4024; i++){
+    data[i] = sin(i * 0.1f);
+  }
+  var sample = audio_load_samplef(audio, data, 4024);
+  audio_update_streams(audio);
+  audio_play_sample(audio, sample);
+
+    static scheme_registerable reg[] = {
     {.f = print_result, .name = "print2"},
 
     {.f = set_bg_color, .name = "set-bg-color"},
@@ -766,10 +789,17 @@ context * context_init(gl_window * win){
     ,{.f = sc_view_new, .name = "view-new"},
     
   };
-   context * ctx = alloc0(sizeof(ctx[0]));
+
+    context * ctx = alloc0(sizeof(ctx[0]));
    ctx->blit3d  = blit3d_context_new();
    var sc = scheme_init_new();
    ctx->sc = sc;
+   ctx->audio = audio;
+
+   //exit(0);
+
+
+   
    scheme_set_output_port_file(sc, stdout);
    scheme_register_foreign_func_list(sc, reg, array_count(reg));
    current_context = ctx;
@@ -789,6 +819,7 @@ context * context_init(gl_window * win){
 
 
 void context_load_lisp(context * ctx, const char * file){
+  printf("Load file: %s\n", file);
   u32_to_u32_table_clear(ctx->shown_models);
   u32_to_u32_table_clear(ctx->model_to_sub_model);
   u32_to_u32_table_clear(ctx->model_to_sub_model);
@@ -801,5 +832,8 @@ void context_load_lisp(context * ctx, const char * file){
 
 
 void context_load_lisp_string(context * ctx, const char * string, size_t length){
-  scheme_load_string(ctx->sc, string);
+  char * str = alloc0(length + 1);
+  memcpy(str, string, length);
+  scheme_load_string(ctx->sc, str);
+  dealloc(str);
 }

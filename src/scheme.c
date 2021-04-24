@@ -4610,7 +4610,7 @@ static struct scheme_interface vtbl ={
 #endif
 
 scheme *scheme_init_new() {
-  scheme *sc=(scheme*)malloc(sizeof(scheme));
+     scheme *sc=(scheme*)calloc(sizeof(scheme), 1);
   if(!scheme_init(sc)) {
     free(sc);
     return 0;
@@ -4620,7 +4620,7 @@ scheme *scheme_init_new() {
 }
 
 scheme *scheme_init_new_custom_alloc(func_alloc malloc, func_dealloc free) {
-  scheme *sc=(scheme*)malloc(sizeof(scheme));
+     scheme *sc=(scheme*)calloc(sizeof(scheme), 1);
   if(!scheme_init_custom_alloc(sc,malloc,free)) {
     free(sc);
     return 0;

@@ -1,8 +1,9 @@
+(display "load pre.lisp?")
 (load "pre.lisp")
 (define show-side-view #f)
 (if show-side-view
     (begin
-     (set-camera -13 0 8.5 0 0.8 0)
+     (set-camera -12 0 8.5 0 0.8 0)
      (perspective 1.0 1.0 0.1 10000))
     (begin
      (set-camera 0 0 0 0 0 0)
@@ -13,11 +14,15 @@
 (define update
     (let ((time 0.0))
       (lambda ()
-
-
+	
+	(display time)
+	  
 	
 	(set! time (+ time 0.01))
 	(let ((rotate-amount (+ 1 (* 0.5 (sin (* 5 time))))))
+	  (display time)
+	  (config-model sprite
+			(offset time 0 0))
 	  ;; todo:
 	  ;;(config-model-part m1 'left-arm
 	  ;;		     (rotate 0 0 rotate-amount))
@@ -81,8 +86,8 @@
      unit-quad
      (scale width height 1)))
 (define arm-color '(color 0.2 0.2 0.2 1))  
-(define mountain-color '(color 0.4 0.4 0.4 1))
-(define sky-color '(color 0.8 0.8 1.0 1))
+(define mountain-color '(color 1.0 0.4 0.4 1))
+(define sky-color '(color 0.0 0.0 1.0 1))
 (define sea-color '(color 0.4 0.4 0.7 1))
 (define sun-color '(color 1 1 0.9 1))
 (define beach-color '(color 0.8 0.8 0.4 1))
@@ -92,7 +97,7 @@
 
 	    (model
 	     (poly -2 0 0
-		   0 1 0
+		   0 4 0
 		   1 0 0
 
 		   1 0.9 0

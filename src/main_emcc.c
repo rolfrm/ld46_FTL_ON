@@ -231,14 +231,16 @@ int main(){
   scheme_load_string(sc, "(display (cons \"Hello world!\" (+ 1 2)))");
   printf("\n", sc);
   var ctx = context_init(win);
-  
-  context_load_lisp_string(ctx, init_scm, 0);
-  context_load_lisp_string(ctx, init_lisp, 0);
-  context_load_lisp_string(ctx, model_lisp, 0);
 
+  context_load_lisp(ctx, "init.scm");
+  context_load_lisp(ctx, "init.lisp");
+
+  context_load_lisp_string(ctx, game2_lisp, game2_lisp_len);
+  printf("Done loading MODEL\n");
   emscripten_set_main_loop_arg((void *) &do_mainloop, ctx, fps, simulate_infinite_loop);
   return 0;
 }
+
 void _error(const char * file, int line, const char * message, ...){
 
 

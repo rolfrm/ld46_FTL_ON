@@ -1,3 +1,4 @@
+(display "load init.lisp?")
 (define *x* ())
 (define *key-up* 265)
 (define *key-down* 264)
