@@ -1,5 +1,7 @@
 (display "load pre.lisp?")
 (load "pre.lisp")
+
+
 (define show-side-view #f)
 (if show-side-view
     (begin
@@ -9,17 +11,30 @@
      (set-camera 0 0 0 0 0 0)
      (orthographic -25.0 25.0 -25.0 25.0 -50 50)
      ))
-(define key-left 65) ;; a
-(define key-right 68) ;; d
-(define key-up 87)
-(define key-down 83)
+(define key-left 263);65) ;; a
+(define key-right 262);68) ;; d
+(define key-up 265) ;;87 s
+(define key-down 264) ;; 83d
+(define key-e 69)
+(define key-space 32)
 (set-bg-color 0.05 0.05 0.05 1)
 (define speed 0.1)
+(display (eq? 1 1))
+(display "???\n")
 (define update
   (let ((time 0.0)
 	(x 0) (y 0))
       (lambda ()
-	
+	(let ((events (pop-events)))
+	  (for-each (lambda (x)
+		      (when (pair? x)
+			(display x)
+			(display "\n")
+			(when (= (cdr x) key-space) 
+			  ;(display (get-model-tag sprite))
+			  (display " <<< SPACE\n"))))
+		    events)
+	  )
 	(set! time (+ time 0.01))
 	;(display time)
   	(when (key-is-down key-left)
@@ -30,7 +45,7 @@
 	  (set! y (+ y speed)))
 	(when (key-is-down key-down)
 	  (set! y (- y speed)))
-
+	
 	(config-model sprite
 		      (offset x y 0))
 	
@@ -112,7 +127,9 @@
     (offset 2 8 0))
    (model
     blue-port
-    (offset -15 0))
+    (offset -15 0)
+    (tag '(portal a))
+    )
    (model
     red-port
     (offset -15 4))

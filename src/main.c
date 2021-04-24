@@ -18,6 +18,20 @@
 #include "ptr_to_u32_table.h"
 #include "main.h"
 
+#define ULONG_MAX 0xFFFFFFFF
+
+static inline f64 randf()
+{
+  static const f64 kTwoOverUlongMax = 2.0f / (f64)ULONG_MAX;
+	// Calculate pseudo-random 32 bit number based on linear congruential method.
+	// http://www.musicdsp.org/showone.php?id=59
+	static unsigned long random = 22222;
+	random = (random * 196314165) + 907633515;
+	u64 sample = random % (1024);
+	return (sample / 1024.0f) * 2.0f - 1.0f;
+}
+
+
 typedef enum{
 	     MODEL_TYPE_POLYGONAL = 100,
 	     MODEL_TYPE_TEXT = 200,
@@ -57,6 +71,7 @@ typedef struct{
   vec3 offset;
   vec3 rotation;
   vec3 scale;
+  pointer tag;
 }model;
 
 typedef struct{
@@ -91,7 +106,7 @@ struct _context{
   u32_to_u32_table * model_to_sub_model;
   
   u32_to_u32_table * shown_models;
-
+  
   u32 current_symbol;
   u32 current_sub_model;
   mat4 view_matrix;
@@ -100,11 +115,12 @@ struct _context{
   vec4 bg_color;
 
   float dt;
-
+  pointer events;
   u32 object_count;
 } ;
 
 context * current_context;
+void push_key_event(context * ctx, int key);
 
 mat4 mat3_rotate_3d_transform(float x, float y, float z, float rx, float ry, float rz){
   var m = mat4_identity();
@@ -332,6 +348,7 @@ void render_update(context * ctx, float dt){
     for(size_t i = 0; i < cnt; i++){
       if(evt[i].type == EVT_KEY_DOWN){
 	//printf("%i %i\n", evt[i].key.scancode, evt[i].key.key, KEY_LEFT);
+	push_key_event(ctx, evt[i].key.key);
       }
     }
   }
@@ -419,6 +436,7 @@ u32 model_new(){
   current_context->model_count += 1;
   current_context->models = realloc(current_context->models, sizeof(current_context->models[0]) * current_context->model_count);
   current_context->models[newid] = (model){0};
+  current_context->models[newid].tag = current_context->sc->NIL;
   current_context->models[newid].scale = vec3_new(1,1,1);
   current_context->models[newid].color = vec4_new(1,1,1,1);
   current_context->models[newid].type = 0;
@@ -755,6 +773,17 @@ pointer sc_view_new(scheme * sc, pointer args){
   return mk_integer(sc, (long) objectid);
 }
 
+pointer pop_events(scheme * sc, pointer args){
+  return POP(current_context->events, sc->NIL);
+}
+
+void push_key_event(context * ctx, int key){
+  var sc = ctx->sc;
+  ctx->events = _cons(sc,
+		      _cons(sc, mk_symbol(sc, "key"),
+			    mk_integer(sc, key), 0), ctx->events, 0);
+}
+
 extern unsigned char _usr_share_fonts_truetype_dejavu_DejaVuSans_ttf[];
 context * context_init(gl_window * win){
   font * fnt =  blit_load_font_from_buffer(_usr_share_fonts_truetype_dejavu_DejaVuSans_ttf, 70);
@@ -764,36 +793,41 @@ context * context_init(gl_window * win){
   audio_context * audio  = audio_initialize(44100);
   
    f32 * data =alloc0(sizeof(data[0]) * 4024);
+   f32 offs = 0.0;
   for(int i = 0; i < 4024; i++){
-    data[i] = sin(i * 0.1f);
+    offs += randf() * 0.1;
+    logd("%f\n", offs);
+    data[i] = sin(i * 0.1f + offs) * 0.1;//  * sin(i * 0.0015f + offs);
   }
   var sample = audio_load_samplef(audio, data, 4024);
   audio_update_streams(audio);
   audio_play_sample(audio, sample);
 
-    static scheme_registerable reg[] = {
-    {.f = print_result, .name = "print2"},
-
-    {.f = set_bg_color, .name = "set-bg-color"},
-    {.f = show_model, .name = "show-model"},
-    {.f = unshow_model, .name = "unshow-model"},
-    {.f = set_perspective, .name="perspective"},
-    {.f = set_orthographic, .name="orthographic"},
-    {.f = set_camera, .name="set-camera"},
-    {.f = key_is_down, .name="key-is-down"},
-    {.f = camera_direction, .name="camera-direction"},
-    {.f = camera_right, .name="camera-right"},
-    {.f = get_dt, .name="get-dt"}
-    ,{.f = config_model, .name="config-model"}
-    ,{.f = object_id_new, .name = "object-new"}
-    ,{.f = sc_view_new, .name = "view-new"},
-    
+  static scheme_registerable reg[] = {
+				      {.f = print_result, .name = "print2"},
+				      
+				      {.f = set_bg_color, .name = "set-bg-color"},
+				      {.f = show_model, .name = "show-model"},
+				      {.f = unshow_model, .name = "unshow-model"},
+				      {.f = set_perspective, .name="perspective"},
+				      {.f = set_orthographic, .name="orthographic"},
+				      {.f = set_camera, .name="set-camera"},
+				      {.f = key_is_down, .name="key-is-down"},
+				      {.f = camera_direction, .name="camera-direction"},
+				      {.f = camera_right, .name="camera-right"},
+				      {.f = get_dt, .name="get-dt"}
+				      ,{.f = config_model, .name="config-model"}
+				      ,{.f = object_id_new, .name = "object-new"}
+				      ,{.f = sc_view_new, .name = "view-new"}
+				      ,{.f = pop_events, .name = "pop-events"}
   };
 
     context * ctx = alloc0(sizeof(ctx[0]));
    ctx->blit3d  = blit3d_context_new();
+
    var sc = scheme_init_new();
    ctx->sc = sc;
+   ctx->events = sc->NIL;
    ctx->audio = audio;
 
    //exit(0);

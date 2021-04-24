@@ -1,3 +1,16 @@
+(define (for a b f)
+  (unless (= a b)
+    (f a)
+    (for (+ 1 a) b f)))
+
+(define (vector-grow vec size)
+  (let ((out (make-vector size)))
+    (for 0 (min (vector-length vec) size)
+	 (lambda (i)
+	   (vector-set! out i (vector-ref vec i))))
+    out))
+
+
 (define (poly . elems)
     (cons 'poly elems))
 (define (color . elems)
@@ -26,10 +39,27 @@
 (define (load-model) (cons 'model (object-new)))
 (define --empty-- (load-model))
 
+(define objs (make-vector 100))
+
+(define (get-model-tag m)
+    (vector-ref objs (cdr m)))
+
 (define (model . model-data)
-    (let ((m (load-model)))
+    (let* ((m (load-model))
+	   (id (cdr m))
+	   )
       (apply config-model m model-data)
+      (for-each
+       (lambda (d)
+	 (when (and (pair? d) (eq? (car d) 'tag))
+	   
+
+	   (display (cons id (cdr d))))) model-data)
+      (display "\n")
       m))
+
+(define (tag . tag-data)
+    (cons 'tag tag-data))
 
 (define (load-view) (cons 'view (view-new)))
 
