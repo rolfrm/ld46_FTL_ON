@@ -20,9 +20,6 @@
 	
 	(set! time (+ time 0.01))
 	(let ((rotate-amount (+ 1 (* 0.5 (sin (* 5 time))))))
-	  (display time)
-	  (config-model sprite
-			(offset time 0 0))
 	  ;; todo:
 	  ;;(config-model-part m1 'left-arm
 	  ;;		     (rotate 0 0 rotate-amount))

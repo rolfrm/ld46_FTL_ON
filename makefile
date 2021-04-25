@@ -1,17 +1,17 @@
-OPT = -g3 -Og
-LIB_SOURCES1 = main.c main_linux.c scheme.c tables.c audio.c ttf_font.c music2.c
+OPT = -Og -g3
+LIB_SOURCES1 = main.c main_linux.c scheme.c tables.c audio.c ttf_font.c music2.c distance_fields.c scheme_extra.c
 
 LIB_SOURCES = $(addprefix src/, $(LIB_SOURCES1))
 CC = gcc
 TARGET = run.exe
 LIB_OBJECTS =$(LIB_SOURCES:.c=.o)
 LDFLAGS= -L. $(OPT) # -Wl,--gc-sections -Wl,-s -fdata-sections -ffunction-sections
-LIBS= libiron.a -lglfw -lGL -lGLEW -lm  -lopenal -licydb  -lX11
+LIBS= libiron.a libglfw3.a -lpthread -ldl -lGL -lGLEW -lm  -lopenal -licydb  -lX11
 ALL= $(TARGET)
 CFLAGS = -Isrc/ -I. -Iinclude/ -std=gnu11 -c $(OPT) -Werror=implicit-function-declaration -Wformat=0 -D_GNU_SOURCE -fdiagnostics-color  -Wwrite-strings -msse4.2 -Werror=maybe-uninitialized -DUSE_VALGRIND -DDEBUG -Wall
 
 $(TARGET): $(LIB_OBJECTS) libiron.a
-	$(CC) $(LDFLAGS) $(LIB_OBJECTS) $(LIBS)  -o $@
+	$(CC) $(LDFLAGS) $(LIB_OBJECTS) $(LIBS) -o $@ 
 
 all: $(ALL)
 

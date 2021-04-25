@@ -53,13 +53,16 @@ typedef struct{
   char * path;
 }text_cache;
 
+distance_field * distance_field_load(scheme * sc, pointer obj);
+
 typedef struct{
   model_type type;
   model_mode mode;
   blit3d_polygon * verts;
   blit3d_polygon * uvs;
+  distance_field * distance_field;
   text_cache cache;
-  u32 view_id;      
+  u32 view_id;
   union{
     
   //distance_field_model * dist;
@@ -151,9 +154,21 @@ void print_object_sub_models(){
     printf("%i -> %i\n", k, v);
   }
 }
+vec3 v3_one = {.x = 1, .y = 1, .z = 1};
+mat4 get_object_transform(model * object){
+  
+  var o = object->offset.data;
+  var r = object->rotation.data;
+  var s = object->scale;
+  var O = mat3_rotate_3d_transform(o[0], o[1], o[2], r[0], r[1], r[2]);
+  if(vec3_compare(v3_one, s, 0.0001) == false){
+    O = mat4_mul(O, mat4_scaled(s.x, s.y, s.z));
+  }
+  return O;
+}
 
 int render_it = 0;
-vec3 v3_one = {.x = 1, .y = 1, .z = 1};
+
 bool alpha_pass = false;
 void render_model(context * ctx, mat4 transform, u32 id, vec4 color){
   //print_object_sub_models();
@@ -162,7 +177,9 @@ void render_model(context * ctx, mat4 transform, u32 id, vec4 color){
   render_it += 1;
   var blit3d = ctx->blit3d;
   var object =  ctx->models + id;
-  
+
+  var O = get_object_transform(object);
+  /*
   var o = object->offset.data;
   var r = object->rotation.data;
   var s = object->scale;
@@ -170,7 +187,7 @@ void render_model(context * ctx, mat4 transform, u32 id, vec4 color){
   if(vec3_compare(v3_one, s, 0.0001) == false){
     O = mat4_mul(O, mat4_scaled(s.x, s.y, s.z));
 
-  }
+    }*/
   if(object->mode & MODEL_MODE_COLOR)
     color = vec4_mul(object->color, color);
   if(color.w <= 0.0)
@@ -386,35 +403,6 @@ void render_update(context * ctx, float dt){
 
 }
 
-int list_len(scheme * sc, pointer data){
-  int cnt = 0;
-  while(data != sc->NIL){
-    cnt += 1;
-    data = pair_cdr(data);
-  }
-  return cnt;
-}
-
-float * pointer_to_floats(scheme * sc, pointer data, size_t * cnt){
-  //var orig_data = data;
-  int l = list_len(sc, data);
-  f32 * array = alloc0(l * sizeof(data[0]));
-  int offset = 0;
-  while(data != sc->NIL){
-    
-    var val = pair_car(data);
-    if(is_integer(val)){
-      array[offset] = (float)ivalue(val);
-    }else if(is_number(val)){
-      array[offset] = (float)rvalue(val);
-    }
-    data = pair_cdr(data);
-    offset += 1;
-  }
-  *cnt = l;
-  return array;
-}
-
 
 pointer set_bg_color(scheme * sc, pointer args){
   size_t count;
@@ -454,6 +442,7 @@ u32 view_new(){
 
   return newid;
 }
+
 
 bool get_view_id_from_pair(pointer pair, u32 * out){
   var car = pair_car(pair);
@@ -518,8 +507,7 @@ pointer offset_model(scheme * sc, pointer args){
   object->offset = offset;
  end:;
   free(f);
-  return sc->NIL; 
-      
+  return sc->NIL;       
 }
 
 
@@ -532,8 +520,6 @@ pointer set_perspective(scheme * sc, pointer args){
   }
   free(fargs);
   return sc->NIL; 
-  
-  
 }
 
 
@@ -634,6 +620,8 @@ pointer config_model(scheme * sc, pointer args){
 	bool isortho = strcmp(symchars, "ortho") == 0;
 	bool issize = strcmp(symchars, "size") == 0;
 	bool isalpha = strcmp(symchars, "alpha") == 0;
+	bool isdf = strcmp(symchars, "distance-field") == 0;
+	ASSERT(!isdf);
 	if(ismodel){
 	  u32 subid;
 	  
@@ -680,6 +668,7 @@ pointer config_model(scheme * sc, pointer args){
     pointer sym = pair_car(pt2);
     if(is_symbol(sym)){
       char * symchars = symname(sym);
+
       bool ispoly = strcmp(symchars, "poly") == 0;
       bool iscolor = !ispoly && strcmp(symchars, "color") == 0;
       bool isscale = !iscolor && !ispoly && strcmp(symchars, "scale") == 0;
@@ -689,6 +678,7 @@ pointer config_model(scheme * sc, pointer args){
       bool istexture = strcmp(symchars, "texture") == 0;
       bool istext = !istexture && strcmp(symchars, "text") == 0;
       bool isview = strcmp(symchars, "view") == 0;
+      bool isdf = strcmp(symchars, "distance-field") == 0;
 
       bool isuv = strcmp(symchars, "uv") == 0;
       if(ispoly || iscolor || isscale || isoffset || isrotate || isuv){
@@ -725,7 +715,21 @@ pointer config_model(scheme * sc, pointer args){
 	}
 	free(fs);
       }
+      
       var object =  current_context->models + id;
+      if(isdf){
+	var sub = pair_cdr(pt2);
+	distance_field * prev = NULL;
+	while(sub != sc->NIL){
+	  ASSERT(prev == NULL);
+	  prev = distance_field_load(sc, pair_car(sub));
+	  logd("distance_field_load\n");
+	  sub = pair_cdr(sub);
+	}
+	logd("loade %i\n", prev);
+	object->distance_field = prev;
+
+      }
       if(ismodel){
 	u32 sub_id;
 	if(get_model_id_from_pair(pt2, &sub_id)){
@@ -784,6 +788,188 @@ void push_key_event(context * ctx, int key){
 			    mk_integer(sc, key), 0), ctx->events, 0);
 }
 
+
+
+pointer pair_cadr(pointer c){
+  return pair_car(pair_cdr(c));
+}
+
+pointer sub_models(scheme * sc, pointer args){
+  pointer a1 = pair_car(args);
+  pointer pt2 = pair_car(a1); //(poly 1 2 3)
+  pointer num = pair_cdr(a1);
+  ASSERT(is_symbol(pt2));
+  ASSERT(is_integer(num));
+  i32 id = ivalue(num);
+  
+  pointer sym = pair_car(pt2);
+    
+  var ctx = current_context;
+  size_t indexes[10];
+  size_t cnt;
+  size_t index = 0;
+  pointer lst = sc->NIL;
+  pointer model = mk_symbol(sc, "model");
+  int keyid = ivalue(pair_car(args));
+  while((cnt = u32_to_u32_table_iter(ctx->model_to_sub_model, &id, 1, NULL, indexes, array_count(indexes), &index))){
+    for(size_t i = 0 ; i < cnt; i++){
+      var sub = ctx->model_to_sub_model->value[indexes[i]];
+      lst = _cons(sc, _cons(sc, model, mk_integer(sc, sub), 1), lst, 1);
+    }
+  }
+  return lst;
+}
+
+u32 sc_to_model(scheme * sc, pointer obj){
+  pointer sym = pair_car(obj);
+  pointer model = mk_symbol(sc, "model");
+  ASSERT(model == sym);
+  pointer id = pair_cdr(obj);
+  ASSERT(is_integer(id));
+  return (u32)ivalue(id);
+}
+
+void trig_min_max(f32 * v, vec3 * min, vec3 * max, u32 vert_count){
+  *min = vec3_infinity;
+  *max = vec3_negative_infinity;
+  for(u32 i =0; i < count; i++){
+    var v2 = vec3_new(v[0], v[1], v[2]);
+    *min = vec3_min(v2, *min);
+    *max = vec3_max(v2, *max);
+    v+= 3;
+  }
+}
+
+vec3 trig_cd(f32 * t1, f32 * t2){
+  
+}
+f32 distance_field_distance(vec3 p, distance_field * field);
+bool detect_collision2(context * ctx, u32 model1, u32 model2, mat4 m1, mat4 m2){
+
+  var obj1 = ctx->models + model1;
+  var obj2 = ctx->models + model2;
+  var t1 = get_object_transform(obj1);
+  m1 = mat4_mul(m1, t1);
+  if(obj1->distance_field != NULL && obj2->distance_field != NULL){
+    //logd("check CD collision %i %i %f!\n", model1, model2);
+    f32 d;
+    vec3 pt = trace_closest_point(vec3_new(10, 10, 10) , m1, m2, obj1->distance_field, obj2->distance_field, &d);
+    if(d < 0.1){
+      return true;
+    }
+    
+  }
+  size_t indexes[10];
+  size_t cnt;
+  size_t index = 0;
+  while((cnt = u32_to_u32_table_iter(ctx->model_to_sub_model, &model1, 1, NULL, indexes, array_count(indexes), &index))){
+    for(size_t i1 = 0; i1 < cnt; i1++){
+      var sub = ctx->model_to_sub_model->value[indexes[i1]];
+      if(detect_collision2(ctx, sub, model2, m1, m2)){
+	return true;
+      }
+    }
+  }
+  return false;
+  
+}
+
+bool detect_collision(context * ctx, u32 model1, u32 model2, mat4 m1, mat4 m2){
+
+  var obj1 = ctx->models + model1;
+  var t1 = get_object_transform(obj1);
+
+  m1 = mat4_mul(m1, t1);
+  if(detect_collision2(ctx, model2, model1, m2, m1)){
+    return true;
+  }
+
+  
+  /*
+  if(obj1->verts != NULL && obj2->verts != NULL && obj1->verts){
+    u32 vert1_len = 0, vert2_len = 0;
+    f32 * vert1 = blit3d_polygon_get_verts(obj1->verts, &vert1_len);
+    f32 * vert2 = blit3d_polygon_get_verts(obj2->verts, &vert2_len);
+    if(vert1 != NULL && vert2 != NULL){
+      
+      
+    }
+    }*/
+  
+  
+  // recurse..
+  size_t indexes[10];
+  size_t cnt;
+  size_t index = 0;
+  while((cnt = u32_to_u32_table_iter(ctx->model_to_sub_model, &model1, 1, NULL, indexes, array_count(indexes), &index))){
+    for(size_t i1 = 0; i1 < cnt; i1++){
+      var sub = ctx->model_to_sub_model->value[indexes[i1]];
+      if(detect_collision(ctx, sub, model2, m1, m2))
+	return true;
+
+      
+      /*size_t indexes2[10];
+      size_t cnt2;
+      size_t index2 = 0;
+      while((cnt2 = u32_to_u32_table_iter(ctx->model_to_sub_model, &model2, 1, NULL, indexes2, array_count(indexes2), &index2))){
+	for(size_t i2 = 0; i2 < cnt; i2++){
+	  var sub2 = ctx->model_to_sub_model->value[indexes2[i1]];
+	  logd("Sub> %i %i\n", sub, sub2);
+	}
+	}*/
+    }
+  }
+  return false;
+}
+
+
+pointer sc_detect_collisions(scheme * sc, pointer args){
+  pointer a1 = pair_car(args);
+  pointer a2 = pair_car(pair_cdr(args));
+  pointer result = sc->NIL;
+  while(sc->NIL != a1){
+    pointer item = pair_car(a1);
+    pointer it = a2;
+    u32 model1 = sc_to_model(sc, item);
+    while(sc->NIL != it){
+
+      pointer item2 = pair_car(it);
+      u32 model2 = sc_to_model(sc, item2);
+      
+      if(detect_collision(current_context, model1, model2, mat4_identity(), mat4_identity())){
+	result = _cons(sc,_cons(sc,item, _cons(sc, item2, sc->NIL,1), 1), result, 1);
+      }
+      it = pair_cdr(it);
+    }
+
+    a1 = pair_cdr(a1);
+  }
+
+  return result;
+}
+
+pointer sc_die(scheme * sc, pointer args){
+  exit(1);
+  return sc->NIL;
+}
+
+pointer vec3_to_cons(scheme * sc, vec3 v){
+  return _cons(sc, mk_real(sc, v.x),
+	       _cons(sc, mk_real(sc, v.y),
+		     _cons(sc, mk_real(sc, v.z), sc->NIL, 1),
+		     1),
+	      1);
+		   
+}
+
+pointer model_offset(scheme * sc, pointer args){
+  u32 model_id = sc_to_model(sc, pair_car(args));
+  var ctx = current_context;
+  vec3 offset = ctx->models[model_id].offset;
+  
+  return vec3_to_cons(sc, offset);
+}
+
 extern unsigned char _usr_share_fonts_truetype_dejavu_DejaVuSans_ttf[];
 context * context_init(gl_window * win){
   font * fnt =  blit_load_font_from_buffer(_usr_share_fonts_truetype_dejavu_DejaVuSans_ttf, 70);
@@ -796,7 +982,6 @@ context * context_init(gl_window * win){
    f32 offs = 0.0;
   for(int i = 0; i < 4024; i++){
     offs += randf() * 0.1;
-    logd("%f\n", offs);
     data[i] = sin(i * 0.1f + offs) * 0.1;//  * sin(i * 0.0015f + offs);
   }
   var sample = audio_load_samplef(audio, data, 4024);
@@ -819,7 +1004,11 @@ context * context_init(gl_window * win){
 				      ,{.f = config_model, .name="config-model"}
 				      ,{.f = object_id_new, .name = "object-new"}
 				      ,{.f = sc_view_new, .name = "view-new"}
-				      ,{.f = pop_events, .name = "pop-events"}
+				      ,{.f = pop_events, .name = "pop-events"},
+				      {.f = sub_models, .name = "sub-models"},
+				      {.f = sc_detect_collisions, .name = "detect-collisions"},
+				      {.f = sc_die, .name= "shutdown"},
+				      {.f = model_offset, .name = "model-offset"}
   };
 
     context * ctx = alloc0(sizeof(ctx[0]));
@@ -861,9 +1050,10 @@ void context_load_lisp(context * ctx, const char * file){
   ctx->view_count = 0;
   var fin = fopen(file, "r");
   scheme_load_named_file(ctx->sc, fin, file);
-  fclose(fin);  
+  fclose(fin);
+  if(ctx->sc->retcode)
+    exit(0);
 }
-
 
 void context_load_lisp_string(context * ctx, const char * string, size_t length){
   char * str = alloc0(length + 1);
@@ -871,3 +1061,4 @@ void context_load_lisp_string(context * ctx, const char * string, size_t length)
   scheme_load_string(ctx->sc, str);
   dealloc(str);
 }
+

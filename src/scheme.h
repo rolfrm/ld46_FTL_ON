@@ -72,7 +72,7 @@ extern "C" {
 #endif
 
 #ifndef USE_TRACING
-# define USE_TRACING 0
+#define USE_TRACING 0
 #endif
 
 #ifndef USE_PLIST

@@ -2297,13 +2297,12 @@ static pointer _Error_1(scheme *sc, const char *s, pointer a) {
 
 #if SHOW_ERROR_LINE
      char sbuf[STRBUFFSIZE];
-
      /* make sure error is not in REPL */
      if (sc->load_stack[sc->file_i].kind & port_file &&
          sc->load_stack[sc->file_i].rep.stdio.file != stdin) {
        int ln = sc->load_stack[sc->file_i].rep.stdio.curr_line;
        const char *fname = sc->load_stack[sc->file_i].rep.stdio.filename;
-
+       
        /* should never happen */
        if(!fname) fname = "<unknown>";
 
@@ -4377,7 +4376,7 @@ static struct {
 #define TST_NATURAL "\016"
 
 typedef struct {
-  dispatch_func func;
+   dispatch_func func;
   char *name;
   int min_arity;
   int max_arity;

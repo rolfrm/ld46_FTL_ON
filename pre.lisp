@@ -10,7 +10,6 @@
 	   (vector-set! out i (vector-ref vec i))))
     out))
 
-
 (define (poly . elems)
     (cons 'poly elems))
 (define (color . elems)
@@ -36,6 +35,12 @@
 (define (alpha . elems)
     (cons 'alpha elems))
 
+(define (distance-field . elems)
+    (cons 'distance-field elems))
+
+(define (circle x y z r)
+    (list 'circle x y z r))
+
 (define (load-model) (cons 'model (object-new)))
 (define --empty-- (load-model))
 
@@ -52,10 +57,8 @@
       (for-each
        (lambda (d)
 	 (when (and (pair? d) (eq? (car d) 'tag))
-	   
-
-	   (display (cons id (cdr d))))) model-data)
-      (display "\n")
+	   (vector-set! objs id (cdr d))))
+       model-data)
       m))
 
 (define (tag . tag-data)
@@ -68,3 +71,64 @@
       (apply config-model m view-data)
       m))
 
+(define (!nil x)
+  (not (null? x)))
+
+(define (println . args)
+    (for-each display args)
+  (display "\n")
+  (when (!nil args)
+    (car args)))
+  
+
+(define (find-tag lst tag)
+    (let loop ((lst lst))
+      (when (!nil lst)
+	(let ((first (car lst)))
+	  (if (and (pair? first) (eq? (car first) tag))
+	      (cdr first)
+	      (when (pair? lst)
+		(loop (cdr lst))))))))
+
+(define (find-name list)
+    (find-tag list 'name))
+
+(define (get-asset model name)
+  (let 
+      iter ((items (sub-models model)))
+      (when (pair? items)
+	(let* ((item (car items))
+	       (tags (get-model-tag item)))
+	  (if (and (pair? tags) (eq? name (find-name tags)))
+	      item
+	      (when (pair? items)
+		(iter (cdr items))))))))
+
+(define (get-assets model tag value)
+  (let 
+      iter ((items (sub-models model)))
+      (when (pair? items)
+	(let* ((item (car items))
+	       (tags (get-model-tag item)))
+	  (if (and (pair? tags) (eq? value (find-tag tags tag)))
+	      (cons item
+		    (when (pair? items)
+		      (iter (cdr items))))
+	      (when (pair? items)
+		(iter (cdr items)))	      
+	      )))))
+
+(define (get-tag model tag)
+  (find-tag (get-model-tag model) tag))
+
+  
+(define (find-model-by-name _models name)
+  (let iter ((models _models))
+    (when (!nil models)
+      (let* ((model (car models))
+	     (tags (get-model-tag model))
+	     (item-name (find-name tags)))
+	(if (eq? item-name name)
+	    model
+	    (iter (cdr models))
+	    )))))
