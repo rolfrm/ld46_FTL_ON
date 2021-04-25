@@ -1,10 +1,10 @@
 (load "pre.lisp")
 
 
-(define show-side-view #f)
+(define show-side-view #t)
 (if show-side-view
     (begin
-     (set-camera -20 0 8.5 0 0.8 0)
+     (set-camera -11 0 8.5 0 0.3 0)
      (perspective 2.0 1.0 0.1 10000))
     (begin
      (set-camera 0 0 0 0 0 0)
@@ -25,6 +25,8 @@
 (define portals ())
 (define levels ())
 (define player ())
+(define ports ())
+(define blocked-portals ())
 (define (load-level level)
   (when current-level
     (unshow-model current-level))
@@ -32,15 +34,10 @@
   (set! current-level level)
   (set! portals (get-assets level 'type 'portal))
   (set! player (get-assets level 'type 'player))
-  (display "Loaded level ")
-  (display level)
-  (display " portals: ")
-  (display portals)
-  (display " player: ")
-  (display player)
-  (display "\n")
+  (set! ports (get-assets level 'type 'port))
+  (println "Loaded level " level " portals: " portals " player: "
+	   player " ports: " ports )
   )
-
 
 
 (define update
@@ -48,16 +45,36 @@
 	(x 0)
 	(y -5)
 	(portal #t)
+	(current-port ())
+	(level-to-load ())
+	(carrying ())
+	
 	)
-      (lambda ()
-	(let ((events (pop-events)))
+    (lambda ()
+      (when #t
+      (let ((collisions (detect-collisions player ports)))
+	(set! current-port
+	      (when (pair? collisions)
+		(car collisions))))
+      (let ((events (pop-events)))
+	(when (!nil events)
 	  (for-each (lambda (x)
 		      (when (pair? x)
 			(when (= (cdr x) key-space) 
-			  (display (get-model-tag sprite))
-			  (display " <<< SPACE\n"))))
-		    events)
-	  )
+			  (println player '-click' current-port)
+			  (set! carrying (cadr current-port))
+			  )))
+		    events))
+	)
+
+      (when (!nil carrying)
+
+	;(println (get-tag carrying 'name))
+	(config-model (get-asset super-level 'carry)
+		      (color 0 1 0 1)
+		      (offset (- x 1) y 1))
+	)
+      
 	(set! time (+ time 0.01))
   	(when (key-is-down key-left)
 	  (set! x (- x speed)))
@@ -70,31 +87,47 @@
 	
 	(config-model (car player)
 		      (offset x y 0))
-	(let ((collisions (detect-collisions player portals)))
+
+	(let ((collisions
+	       (detect-collisions player
+				  (filter portals
+					  (lambda (portal)
+					    (not (!nil (find blocked-portals portal))))))))
 	  (when (null? collisions)
 	    (set! portal #f))
 	  (when (and (!nil collisions) (not portal))
 	    (for-each
 	     (lambda (item)
-	       (let* ((m1 (car item))
+	       (let* ((m1 (println (car item)))
 		      (m2 (cadr item))
 		      (c1 (get-tag m2 'connect))
 		      (new-level (find-model-by-name levels (car c1)))
 		      (the-portal (get-asset new-level (cadr c1)))
 		      (portal-loc (model-offset the-portal))
 		      )
-		 (println ">>>" levels c1 (model-offset the-portal) )
 		 (when (!nil new-level)
+
 		   (set! portal #t)
+		   (when (!nil carrying)
+		     (block-portal the-portal)
+		     (block-portal m2)
+		     )
 		   (load-level new-level)
 		   (set! x (car portal-loc))
 		   (set! y (cadr portal-loc))
 		   )
 		 ))
 	     collisions)
-		      ))
-	;(detect-collisions (list (car portals)) (list (cadr portals)))
-	)))
+	  )
+	)
+	))))
+
+(define (block-portal model)
+  (set! blocked-portals (cons model blocked-portals ))
+  (config-model model
+		(color 0.3 0.3 0.6 1.0)))
+
+(define hidden '(hidden))
 
 (define unit-quad
     (model
@@ -104,11 +137,22 @@
 	   1 1 0)
      ))
 
+(define blue (color 0 0 1 1))
+(define red (color 1 0 0 1))
+(define green (color 0 1 0 1))
+
+(define quad2
+  (model
+   (poly 0 0 0
+	 0 1 0
+	 1 0 0
+	 1 1 0)))
+
 (define (rect width height)
-    (model
-     unit-quad
-     (scale width height 1)))
-	    
+  (model
+   unit-quad
+   (scale width height 1)))
+
 (define m1
   (model
    (model
@@ -127,6 +171,27 @@
 
 (define sprite
   (model
+   (model
+    hidden
+    quad2
+    blue
+    (tag '(name blue-carry))
+    (offset 1 0 0)
+    )
+   (model
+    hidden
+    quad2
+    green
+    (tag '(name green-carry))
+    (offset 0 2 0)
+    )
+   (model
+    quad2
+    hidden
+    red
+    (tag '(name red-carry))
+    (offset 1 1  0)
+    )
    m1
    (tag 1)
    (distance-field (circle 0 0 0 1))
@@ -139,7 +204,11 @@
      1 0 0
      0 1 0
      1 1 0)
-   (scale 2 2)))
+   (scale 2 2)
+   (distance-field
+    (rectangle 0.5 0.5 0.5 1.0 1.0 1.0))
+
+   ))
 
 (define blue-port
   (model
@@ -151,35 +220,64 @@
    port
    (color 1 0 0 1)))
 
+(define hexagon
+  (poly
+   0 0 0
+   1 1 0
+   1 -1 0
+   2 1 0
+   2 -1 0
+   3 0 0))
+(define pi 3.14)
+(define (ngon-calculator n)
+  (let ((angle (/ (* 2.0 pi) n))
+	(result ()))
+    
+    (for 0 n (lambda (i)
+	       (let* ((i2 (ceiling (if (= (modulo i 2) 1) (/ i 2) (- (/ i 2)))))
+		      (p (* angle i2)))
+		 (set! result (cons (cons (+ (cos p)) (+ (sin p)) ) result)))))
+    (reverse result)
+    ))
+
+(define (npoly-calculator n)
+  (let ((result '(poly)))
+    (for-each 
+     (lambda (x) (set! result (cons 0.25  (cons (cdr x) (cons (car x) result)))))
+     (ngon-calculator n))
+    (reverse result)))
+		  
+
+(println (ngon-calculator 5) (npoly-calculator 5))
+
+(define pentagon
+  (npoly-calculator 5))
+
+(define hexagon
+  (npoly-calculator 6))
+
+(define megagon
+  (npoly-calculator 11))
+
+
+;(shutdown pentagon)
+
+
 (define portal1
   (model
-   (poly
-    0 0 0
-    0.5 1 0
-    0.5 -1 0
-    1.5 0.8 0
-    2 -0.8 0
-    2 -0.2 0
-    )
+   pentagon
    (distance-field
     (circle 1 0 0 1.0))
    (color .5 .9 .5 1)
-   (rotate 0 0 0.0)
+   (rotate 0 0 0.5)
    (scale 1 1)))
     
 
 (define portal2
   (model
-   (poly
-    0 0 0
-    0.8 1 0
-    0.4 -0.9 0
-    1.5 0.8 0
-    2 -0.8 0
-    2 -0.2 0
-    )
+   hexagon
    (color .5 .9 .5 1)
-   (scale 1 1)
+   (scale 6 6)
    (distance-field
     (circle 1 1 0 1.0))
    ))
@@ -193,7 +291,7 @@
    (model
     portal1
     (offset 2 8 0)
-    (scale -1 1)
+    (scale -2 1.5)
     (tag '(name . a)
 	 '(type . portal)
 	 '(connect level2 a)
@@ -211,14 +309,21 @@
    (model
     blue-port
     (offset -15 0)
-    (tag '(name . b))
+    (tag '(name . blue)
+	 '(type . port))
     )
    (model
     red-port
-    (offset -15 4))
+    (offset -15 4)
+    (tag
+     '(name . red)
+     '(type . port))
+    )
    (model
-    (model port
-	   (color 0.5 1 0 1))
+    port
+    (color 0.5 1 0 1)
+    (tag '(type . port)
+	 '(name . green))
     (offset -15 8))
    (model
     (poly
@@ -227,7 +332,7 @@
      0 1 0
      1 1 0)
     (scale 50 50 1)
-    (offset -25 -25 0)
+    (offset -25 -25 -0.1)
     (color 0.2 0.2 0.2 1.0))
    (tag '(name . level1))
    ))
@@ -305,11 +410,9 @@
 
 (set! levels (list level1 level2 level3))
 
-(load-level level2)
 (display (list (find-tag '((connect . level2)) 'connect) "---\n"))
 (display (list (find-model-by-name levels 'level3) "\n"))
-;(shutdown)
-(display level1)
+
 (display "\n")
 (display (sub-models level2))
 (for-each (lambda (model)
@@ -319,6 +422,24 @@
 	  (sub-models level2))
 
 
-(display "||||")
-(display (get-assets level2 'type 'portal))
-(display "\n")
+(println "|||" (get-assets level1 'type 'portal)) 
+(println (get-assets level1 'type 'port) "<-----") 
+
+
+(define super-level
+  (model
+   (model
+    (poly
+     0 0 0
+     1 0 0
+     0 1 0)
+    (offset 0 0 1)
+    (color 1 0 0 1)
+    (tag '(name . carry))
+    )))
+(show-model super-level)
+
+
+(load-level level1)
+(println "----> " (find (list 1 '(1 2) 3 4 5) '(1 2)))
+(println "----> " (filter '(9 8 1 2 3 4 5) (lambda (x) (> x 3))))

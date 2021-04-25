@@ -10,7 +10,7 @@ context * context_init(gl_window * win);
 
 void context_load_lisp(context * ctx, const char * file);
 void context_load_lisp_string(context * ctx, const char * string, size_t length);
-
+void context_load_lisp_string2(context * ctx, const char * string);
 // distance fields
 
 typedef struct{

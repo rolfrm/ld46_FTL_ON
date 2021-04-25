@@ -2,17 +2,17 @@ OPT = -O3 -g0
 
 LISP_FILES = $(wildcard *.lisp) $(wildcard *.scm)
 LISP_FILES2 = $(foreach file,$(LISP_FILES),--embed-file $(file))
-SOURCES1 = main_emcc.c scheme.c main.c tables.c
+SOURCES1 = main_emcc.c scheme.c main.c tables.c audio.c ttf_font.c music2.c distance_fields.c scheme_extra.c
 SOURCES = $(addprefix src/, $(SOURCES1))
 
 CC = emcc
 TARGET = index.js
 OBJECTS =$(SOURCES:.c=.bc)
 LDFLAGS= -s USE_GLFW=3 -s WASM=1 -s USE_WEBGL2=1 -s 'EXTRA_EXPORTED_RUNTIME_METHODS=["ccall", "cwrap"]' -s TOTAL_MEMORY=256MB  -s ALLOW_MEMORY_GROWTH=1 #-s DISABLE_DEPRECATED_FIND_EVENT_TARGET_BEHAVIOR=1
-LIBS= ../iron/libiron.bc ../libicydb/libicydb.bc
-CFLAGS = -DUSE_STRLWR=0 -std=c11 -I.. -I../libicydb/include -c $(OPT) -Wall -Wextra -Werror=implicit-function-declaration -Wformat=0 -D_GNU_SOURCE  -fdiagnostics-color -s WASM=1 -s USE_GLFW=3 -s 'EXTRA_EXPORTED_RUNTIME_METHODS=["ccall", "cwrap"]' #-s DISABLE_DEPRECATED_FIND_EVENT_TARGET_BEHAVIOR=1  #-s 'EXTRA_EXPORTED_RUNTIME_METHODS=["ccall", "cwrap"]' -s EXPORTED_FUNCTIONS="['_c_volume', '_main']"
+LIBS= libiron.bc ../libicydb/libicydb.bc
+CFLAGS = -DUSE_STRLWR=0 -std=c11 -I. -I../libicydb/include -c $(OPT) -Wall -Wextra -Werror=implicit-function-declaration -Wformat=0 -D_GNU_SOURCE  -fdiagnostics-color -s WASM=1 -s USE_GLFW=3 -s 'EXTRA_EXPORTED_RUNTIME_METHODS=["ccall", "cwrap"]' #-s DISABLE_DEPRECATED_FIND_EVENT_TARGET_BEHAVIOR=1  #-s 'EXTRA_EXPORTED_RUNTIME_METHODS=["ccall", "cwrap"]' -s EXPORTED_FUNCTIONS="['_c_volume', '_main']"
 all: $(TARGET)
-$(TARGET): $(OBJECTS) ../libicydb/libicydb.bc $(LISP_FILES)
+$(TARGET): $(OBJECTS) ../libicydb/libicydb.bc $(LISP_FILES) libiron.bc
 	$(CC) $(LDFLAGS) $(OBJECTS) $(LIBS) -o $@ $(LISP_FILES2)
 src/main.c:  src/lisp.c
 
@@ -23,6 +23,14 @@ src/lisp.c: game2.lisp init.scm init.lisp
 
 %.bc: %.c $(HEADERS) ../iron/libiron.bc
 	$(CC) -s WASM=1 $(CFLAGS) $< -o $@ -MMD -MF $@.depends
+
+iron/libiron.bc: iron/makefile.emcc
+	make -C iron makefile.emcc
+
+libiron.bc: iron/libiron.bc
+	cp iron/libiron.bc libiron.bc
+
+
 depend: h-depend
 clean:
 	rm $(OBJECTS) $(TARGET) src/*.bc.depends

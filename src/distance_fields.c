@@ -14,7 +14,25 @@ f32 circle_distance(vec3 pt, void * _v){
   return vec3_len(vec3_sub(pt, v->xyz)) - v->w;
 }
 
-	       			     
+f32 square2d(vec2 p, vec2 center, vec2 radius){
+  p = vec2_abs(vec2_sub(p, center));
+  if(p.x > radius.x){
+    if(p.y > radius.y)
+      return vec2_len(vec2_sub(p, radius));
+    return p.x - radius.x;
+  }else if(p.y > radius.y)
+    return p.y - radius.y;
+  // inside the square.
+  return fmax(p.y- radius.y, p.x - radius.x);
+}
+ 
+
+f32 square_distance(vec3 p, void * _v){
+  f32 * v = _v;
+  vec3 a = vec3_new(v[0], v[1], v[2]);
+  vec3 r = vec3_new(v[3], v[4], v[5]);
+  return square2d(p.xy, a.xy, r.xy);
+}
 
 distance_field * circle_df(f32 x, f32 y, f32 z, f32 r){
   distance_field * df = alloc0(sizeof(distance_field));
@@ -27,18 +45,48 @@ distance_field * circle_df(f32 x, f32 y, f32 z, f32 r){
 
 }
 
+distance_field * square_df(f32 x1, f32 y1, f32 z1, f32 x2, f32 y2, f32 z2 ){
+  distance_field * df = alloc0(sizeof(distance_field));
+  f32 * v4 = alloc0(sizeof(v4[0]) * 6);
+  v4[0] = x1;
+  v4[1] = y1;
+  v4[2] = z1;
+  v4[3] = x2;
+  v4[4] = y2;
+  v4[5] = z2;
+
+  df->userdata = v4;
+  df->f = square_distance;
+  return df;
+}
+
+
 distance_field * distance_field_load(scheme * sc, pointer obj){
   var name = pair_car(obj);
-  if(!is_symbol(name)) return NULL;
+  distance_field * df = NULL;
+  if(!is_symbol(name)) return df;
   if(symbol_eq(name, "circle")){
     size_t c = 0;
+    logd("Load Circle %i\n", c);
     f32 * fs = pointer_to_floats(sc, pair_cdr(obj), &c);
-    logd("LOAD CIRCLE %i\n", c);
     if(c == 4){
-      return circle_df(fs[0], fs[1], fs[2], fs[3]);
+      df = circle_df(fs[0], fs[1], fs[2], fs[3]);
+    }else if(c == 1){
+      df = circle_df(0,0,0, fs[0]);
     }
+    dealloc(fs);
+  }else if(symbol_eq(name, "rectangle")){
+    size_t c = 0;
+    logd("Load Rect %i\n", c);
+    f32 * fs = pointer_to_floats(sc, pair_cdr(obj), &c);
+    if(c == 6){
+      df = square_df(fs[0], fs[1], fs[2], fs[3], fs[4], fs[5]);
+    }else if(c == 3){
+      df = square_df(0,0,0, fs[0], fs[1], fs[2]);
+    }
+    dealloc(fs);
   }
-  return NULL;
+  return df;
 }
 
 vec3 gradient_vector(vec3 p, distance_field * field, bool half){
@@ -80,6 +128,7 @@ vec3 trace_closest_point(vec3 p, mat4 m1, mat4 m2, distance_field *d1, distance_
   var inv1 = mat4_invert(m1);
   var inv2 = mat4_invert(m2);
   f32 mind = 100000;
+  vec3 half2 = p;
   for(int i = 0; i < 15; i++){
    
    vec3 p1 = mat4_mul_vec3(inv1, p);
@@ -88,8 +137,7 @@ vec3 trace_closest_point(vec3 p, mat4 m1, mat4 m2, distance_field *d1, distance_
    f32 b1 = distance_field_distance(p2, d2);
 
    vec3 a = gradient_vector(p1, d1, true);
-   var p3 = vec3_sub(p1, vec3_scale(a, 0.8));
-   f32 a3 = distance_field_distance(p3, d1);
+   var p3 = vec3_sub(p1, vec3_scale(a, 0.95));
    p3 = mat4_mul_vec3(m1, p3);
    var a2 = vec3_sub(p, p3);
     vec3 p0 = p;
@@ -97,6 +145,11 @@ vec3 trace_closest_point(vec3 p, mat4 m1, mat4 m2, distance_field *d1, distance_
 
     var half = vec3_scale(vec3_add(p0, p), 0.5);
     mind = MIN(mind, a1 + b1);
+    f32 d = vec3_sqlen(vec3_sub(half2, half));
+    if(d < 0.001){
+      break;
+    }
+    half2 = half;
     SWAP(d1, d2);
     SWAP(m1, m2);
     SWAP(inv1, inv2);

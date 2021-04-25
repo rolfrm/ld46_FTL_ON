@@ -364,16 +364,19 @@ void render_update(context * ctx, float dt){
     size_t cnt = gl_get_events(evt, array_count(evt));
     for(size_t i = 0; i < cnt; i++){
       if(evt[i].type == EVT_KEY_DOWN){
-	//printf("%i %i\n", evt[i].key.scancode, evt[i].key.key, KEY_LEFT);
+	printf("%i %i\n", evt[i].key.scancode, evt[i].key.key, KEY_LEFT);
 	push_key_event(ctx, evt[i].key.key);
       }
     }
   }
   //printf("Update!\n");
-  audio_update_streams(ctx->audio);
-  scheme_load_string(ctx->sc, "(update)");
   current_context = ctx;
+  //audio_update_streams(ctx->audio);
+  scheme_load_string(ctx->sc, "(update)");
+  
+
   current_context->dt = dt;
+
   gl_window_make_current(ctx->win);
   
   blit_begin(BLIT_MODE_UNIT);
@@ -385,14 +388,15 @@ void render_update(context * ctx, float dt){
   glDisable(GL_CULL_FACE);
   glDisable(GL_BLEND);
   glCullFace(GL_BACK);
-
+  //glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+  
   blit3d_context_load(blit3d);
   alpha_pass = false;
   for(u32 i = 0; i < ctx->shown_models->count; i++){
     render_it = 0;
     render_model(ctx, mat4_identity(), ctx->shown_models->key[i + 1], vec4_new(1,1,1,1));  
   }
-
+  return;
   alpha_pass = true;
   glEnable(GL_BLEND);
   glDisable(GL_DEPTH_TEST);
@@ -702,7 +706,7 @@ pointer config_model(scheme * sc, pointer args){
 	}else if(iscolor){
 	  memcpy(object->color.data, fs, MIN(4, c) * sizeof(fs[0]));
 	  object->mode |= MODEL_MODE_COLOR;
-	  printf("COLOR: ");vec4_print(object->color);printf("\n");
+	  //printf("COLOR: ");vec4_print(object->color);printf("\n");
 	}else if(isscale){
 	  memcpy(object->scale.data, fs, MIN(3, c) * sizeof(fs[0]));
 	  //printf("SCALE: ");vec3_print(object->scale);printf("\n");
@@ -715,6 +719,7 @@ pointer config_model(scheme * sc, pointer args){
 	}
 	free(fs);
       }
+
       
       var object =  current_context->models + id;
       if(isdf){
@@ -778,14 +783,23 @@ pointer sc_view_new(scheme * sc, pointer args){
 }
 
 pointer pop_events(scheme * sc, pointer args){
-  return POP(current_context->events, sc->NIL);
+  
+  pointer new = pair_car(current_context->events);
+  set_car(current_context->events, sc->NIL);
+  return new;
+  //return POP(current_context->events, sc->NIL);
 }
 
 void push_key_event(context * ctx, int key){
   var sc = ctx->sc;
-  ctx->events = _cons(sc,
-		      _cons(sc, mk_symbol(sc, "key"),
-			    mk_integer(sc, key), 0), ctx->events, 0);
+  pointer s = NULL;
+  if(s == NULL)
+    s = mk_symbol(sc, "key");
+  logd("%p\n", s);
+  var key_val = mk_integer(sc, key);
+  var item =  key_val;//_cons(sc, key_val, 1);
+  set_car(ctx->events, _cons(sc, _cons(sc, s, key_val, 1), pair_car(ctx->events), 1));
+
 }
 
 
@@ -840,10 +854,6 @@ void trig_min_max(f32 * v, vec3 * min, vec3 * max, u32 vert_count){
   }
 }
 
-vec3 trig_cd(f32 * t1, f32 * t2){
-  
-}
-f32 distance_field_distance(vec3 p, distance_field * field);
 bool detect_collision2(context * ctx, u32 model1, u32 model2, mat4 m1, mat4 m2){
 
   var obj1 = ctx->models + model1;
@@ -970,6 +980,14 @@ pointer model_offset(scheme * sc, pointer args){
   return vec3_to_cons(sc, offset);
 }
 
+pointer scheme_init_internal(scheme * sc, pointer args){
+  pointer l = pair_car(args);
+  current_context->events = l;
+
+  return sc->NIL;
+}
+
+
 extern unsigned char _usr_share_fonts_truetype_dejavu_DejaVuSans_ttf[];
 context * context_init(gl_window * win){
   font * fnt =  blit_load_font_from_buffer(_usr_share_fonts_truetype_dejavu_DejaVuSans_ttf, 70);
@@ -1008,7 +1026,8 @@ context * context_init(gl_window * win){
 				      {.f = sub_models, .name = "sub-models"},
 				      {.f = sc_detect_collisions, .name = "detect-collisions"},
 				      {.f = sc_die, .name= "shutdown"},
-				      {.f = model_offset, .name = "model-offset"}
+				      {.f = model_offset, .name = "model-offset"},
+				      {.f = scheme_init_internal, .name = "__scheme-init-internal__"}
   };
 
     context * ctx = alloc0(sizeof(ctx[0]));
@@ -1018,14 +1037,12 @@ context * context_init(gl_window * win){
    ctx->sc = sc;
    ctx->events = sc->NIL;
    ctx->audio = audio;
-
-   //exit(0);
-
-
    
    scheme_set_output_port_file(sc, stdout);
    scheme_register_foreign_func_list(sc, reg, array_count(reg));
+
    current_context = ctx;
+   context_load_lisp_string2(ctx, "(define **events** (cons () ())) (__scheme-init-internal__ **events**)");
    ctx->shown_models = u32_to_u32_table_create(NULL);
    ctx->model_to_sub_model = u32_to_u32_table_create(NULL);
    ((bool *) &ctx->model_to_sub_model->is_multi_table)[0] = true;
@@ -1060,5 +1077,8 @@ void context_load_lisp_string(context * ctx, const char * string, size_t length)
   memcpy(str, string, length);
   scheme_load_string(ctx->sc, str);
   dealloc(str);
+}
+void context_load_lisp_string2(context * ctx, const char * string){
+  context_load_lisp_string(ctx, string, strlen(string));
 }
 

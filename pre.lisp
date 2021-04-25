@@ -40,6 +40,9 @@
 
 (define (circle x y z r)
     (list 'circle x y z r))
+(define (rectangle . args)
+    (cons 'rectangle args))
+
 
 (define (load-model) (cons 'model (object-new)))
 (define --empty-- (load-model))
@@ -48,6 +51,7 @@
 
 (define (get-model-tag m)
     (vector-ref objs (cdr m)))
+
 
 (define (model . model-data)
     (let* ((m (load-model))
@@ -132,3 +136,19 @@
 	    model
 	    (iter (cdr models))
 	    )))))
+
+
+(define (find list item)
+  (let loop ((list list))
+    (unless (null? list)
+      (if (equal? (car list) item)
+	  list
+	  (loop (cdr list))))))
+
+
+(define (filter list pred)
+  (let loop ((list list))
+    (unless (null? list)
+      (if (pred (car list))
+	  (cons (car list) (loop (cdr list)))
+	  (loop (cdr list))))))
